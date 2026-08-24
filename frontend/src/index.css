@@ -1,0 +1,25 @@
+@import "tailwindcss";
+
+@theme {
+  --color-plntr-900: #0F172A;
+  --color-plntr-800: #1E293B;
+  --color-plntr-glow: #38BDF8;
+  --color-plntr-accent: #818CF8;
+  --background-image-grid-pattern: linear-gradient(to right, #1f2937 1px, transparent 1px), linear-gradient(to bottom, #1f2937 1px, transparent 1px);
+}
+
+@layer base {
+  body {
+    @apply bg-plntr-900 text-slate-300 font-sans antialiased overflow-x-hidden;
+  }
+}
+
+@layer utilities {
+  .glass-panel {
+    @apply bg-plntr-800/60 backdrop-blur-md border border-slate-700/50 shadow-lg;
+  }
+
+  .glow-text {
+    text-shadow: 0 0 10px rgba(56, 189, 248, 0.5);
+  }
+}
