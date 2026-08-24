@@ -1,93 +1,186 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import {
+  Viewer,
+  ImageryLayer,
+} from 'resium'
+import {
+  Ion,
+  ArcGisMapServerImageryProvider,
+  Color,
+  Cartesian3,
+} from 'cesium'
+import 'cesium/Build/Cesium/Widgets/widgets.css'
+
+Ion.defaultAccessToken = undefined
 
 function App() {
   const [data, setData] = useState(null)
+  const viewerRef = useRef(null)
+  const drawerRef = useRef(null)
+  const toggleBtnRef = useRef(null)
+  const [imageryProvider, setImageryProvider] = useState(null)
 
+  // Load ESRI satellite imagery (free, no token)
   useEffect(() => {
-    fetch('http://localhost:8000/api/insights/')
-      .then(res => res.json())
-      .then(data => setData(data))
-      .catch(console.error)
+    ArcGisMapServerImageryProvider.fromUrl(
+      'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer'
+    ).then(provider => {
+      setImageryProvider(provider)
+    })
   }, [])
 
+  // Fetch backend data
+  useEffect(() => {
+    fetch('http://localhost:8000/api/insights/')
+      .then(r => r.json())
+      .then(d => setData(d))
+      .catch(() => { })
+  }, [])
+
+  // Configure camera after viewer mounts
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (viewerRef.current?.cesiumElement) {
+        const viewer = viewerRef.current.cesiumElement
+        viewer.scene.skyBox.show = true
+        viewer.scene.backgroundColor = Color.fromCssColorString('#0a0e1a')
+        viewer.scene.globe.enableLighting = false
+        viewer.scene.globe.showGroundAtmosphere = true
+        viewer.camera.flyTo({
+          destination: Cartesian3.fromDegrees(19.0, 50.0, 20000000),
+          duration: 0,
+        })
+        clearInterval(interval)
+      }
+    }, 200)
+    return () => clearInterval(interval)
+  }, [])
+
+  // Toggle drawer using direct DOM manipulation to prevent component/map reloading or re-rendering
+  const handleToggle = () => {
+    if (drawerRef.current && toggleBtnRef.current) {
+      const isOpen = drawerRef.current.style.left === '0px'
+      drawerRef.current.style.left = isOpen ? '-260px' : '0px'
+      toggleBtnRef.current.innerHTML = isOpen ? '☰' : '✕'
+    }
+  }
+
   return (
-    <div className="min-h-screen relative w-full overflow-hidden bg-plntr-900">
-      {/* Background Grid Pattern */}
-      <div className="absolute inset-0 bg-grid-pattern opacity-20 pointer-events-none" style={{ backgroundSize: '40px 40px' }}></div>
-      <div className="absolute inset-0 bg-gradient-to-br from-plntr-900 to-plntr-800 opacity-90 pointer-events-none"></div>
+    <div style={{
+      width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column',
+      overflow: 'hidden', background: '#0a0e1a', fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif"
+    }}>
 
-      <div className="relative z-10 p-4 md:p-8 max-w-7xl mx-auto flex flex-col gap-8">
-        <header className="flex justify-between items-end pb-4 border-b border-slate-700/50">
+      {/* ── Header ── */}
+      <header style={{
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        padding: '14px 28px', borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+        background: 'rgba(10,14,26,0.92)', backdropFilter: 'blur(12px)',
+        zIndex: 30, position: 'relative', flexShrink: 0
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+          {/* Menu Toggle Button */}
+          <button
+            ref={toggleBtnRef}
+            onClick={handleToggle}
+            style={{
+              background: 'none', border: 'none', color: '#ffffff', fontSize: 24,
+              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              padding: 4, width: 32, height: 32
+            }}
+            title="Toggle Menu Panel"
+          >
+            ☰
+          </button>
+
           <div>
-            <div className="text-[10px] text-slate-500 font-mono tracking-[0.2em] mb-1">GLOBAL INTELLIGENCE</div>
-            <h1 className="text-3xl font-bold tracking-widest text-plntr-glow glow-text">PALANTYR.NET</h1>
-          </div>
-          <div className="flex gap-4">
-            <div className="px-3 py-1 rounded bg-plntr-800/80 text-[10px] font-mono tracking-widest border border-slate-700/50">
-              SYS: {data ? data.status : 'LOADING'}
+            <div style={{ fontSize: 24, fontWeight: 700, letterSpacing: '0.18em', color: '#ffffff', textShadow: '0 0 14px rgba(255,255,255,0.3)' }}>
+              TURMALIN
             </div>
           </div>
-        </header>
+        </div>
 
-        <main className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="glass-panel p-6 rounded-lg flex flex-col gap-4">
-            <h2 className="text-xs tracking-widest text-slate-400 font-mono">GLOBAL NODES</h2>
-            <div className="text-5xl text-plntr-glow font-light glow-text tracking-tight">{data ? data.nodes_connected.toLocaleString() : '--'}</div>
-            <div className="text-[10px] text-green-400 font-mono tracking-tight flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
-              Network stable
+        <div></div>
+      </header>
+
+      {/* ── Body ── */}
+      <div style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative' }}>
+
+        {/* ── Slide-out Menu (Drawer) ── */}
+        <div
+          ref={drawerRef}
+          style={{
+            position: 'absolute', top: 0, left: '-260px',
+            width: 260, height: '100%',
+            display: 'flex', flexDirection: 'column',
+            borderRight: '1px solid rgba(255, 255, 255, 0.08)',
+            background: 'rgba(10,14,26,0.95)',
+            backdropFilter: 'blur(16px)', zIndex: 25,
+            transition: 'left 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+          }}
+        >
+          <Stat label="NODES" value={data ? data.nodes_connected.toLocaleString() : '—'} color="#ffffff" />
+          <Stat label="THREAT" value={data ? data.threat_level : '—'} color="#cbd5e1" />
+          <Stat label="ANOMALIES" value={data ? String(data.active_anomalies) : '—'} color="#ffffff" />
+
+          <div style={{ flex: 1, padding: '16px 20px', overflow: 'hidden' }}>
+            <div style={{ fontSize: 9, color: '#475569', fontFamily: 'monospace', letterSpacing: '0.15em', marginBottom: 10 }}>
+              DATA FEED
             </div>
-          </div>
-
-          <div className="glass-panel p-6 rounded-lg flex flex-col gap-4">
-            <h2 className="text-xs tracking-widest text-slate-400 font-mono">THREAT LEVEL</h2>
-            <div className="text-5xl text-slate-200 font-light tracking-tight">{data ? data.threat_level : '--'}</div>
-            <div className="text-[10px] text-slate-400 font-mono tracking-tight">&gt; Standard protocol</div>
-          </div>
-
-          <div className="glass-panel p-6 rounded-lg flex flex-col gap-4">
-            <h2 className="text-xs tracking-widest text-slate-400 font-mono">ACTIVE ANOMALIES</h2>
-            <div className="text-5xl text-plntr-accent font-light glow-text tracking-tight">{data ? data.active_anomalies : '--'}</div>
-            <div className="text-[10px] text-slate-400 font-mono tracking-tight">&gt; Investigating ({data ? data.active_anomalies : 0})</div>
-          </div>
-
-          <div className="glass-panel p-6 rounded-lg md:col-span-3 min-h-[400px] flex gap-8 relative overflow-hidden">
-
-            {/* Left side data feed list */}
-            <div className="font-mono w-1/3 flex flex-col gap-2 border-r border-slate-700/50 pr-6 relative z-10">
-              <div className="text-xs text-slate-500 mb-2">LIVE DATA FEED</div>
-              {[...Array(6)].map((_, i) => (
-                <div key={i} className="text-[10px] text-slate-400 border-b border-slate-800 pb-2 flex justify-between">
-                  <span>DATA_PACKET_{Math.floor(Math.random() * 1000)}</span>
-                  <span className="text-plntr-glow">OK</span>
-                </div>
-              ))}
-            </div>
-
-            {/* Map Visualization Placeholder */}
-            <div className="flex-1 font-mono text-slate-500 tracking-widest flex flex-col gap-4 items-center justify-center relative z-10">
-              <div className="relative w-48 h-48 flex items-center justify-center">
-                <div className="absolute inset-0 rounded-full border border-plntr-glow/30"></div>
-                <div className="absolute inset-4 rounded-full border border-plntr-glow/20"></div>
-                <div className="absolute inset-8 rounded-full border border-plntr-glow/10"></div>
-
-                <div className="absolute w-2 h-2 rounded-full bg-plntr-glow shadow-[0_0_10px_#38BDF8] top-1/4 left-1/4 animate-ping"></div>
-                <div className="absolute w-2 h-2 rounded-full bg-plntr-accent shadow-[0_0_10px_#818CF8] bottom-1/3 right-1/4 animate-ping" style={{ animationDelay: '1s' }}></div>
-
-                {/* Radar sweep effect */}
-                <div className="h-1/2 w-1/2 bg-gradient-to-r from-plntr-glow/0 to-plntr-glow/20 absolute top-0 right-0 origin-bottom-left animate-spin" style={{ animationDuration: '3s', borderRadius: '0 100% 0 0' }}></div>
-
+            {Array.from({ length: 8 }, (_, i) => (
+              <div key={i} style={{
+                display: 'flex', justifyContent: 'space-between', fontSize: 10, fontFamily: 'monospace',
+                color: '#475569', padding: '5px 0', borderBottom: '1px solid rgba(255,255,255,0.05)'
+              }}>
+                <span>PKT_{String(1001 + i)}</span>
+                <span style={{ color: '#ffffff' }}>OK</span>
               </div>
-              <div className="text-xs text-plntr-glow mt-4 bg-plntr-900/50 px-4 py-2 border border-slate-700 backdrop-blur-sm">
-                {data ? data.message : "Establishing connection..."}
-              </div>
-            </div>
-
-            {/* Add grid lines specifically for this panel */}
-            <div className="absolute inset-0 bg-grid-pattern opacity-10 pointer-events-none" style={{ backgroundSize: '20px 20px' }}></div>
+            ))}
           </div>
-        </main>
+
+          <div style={{
+            padding: '10px 20px', borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+            fontSize: 9, fontFamily: 'monospace', color: '#ffffff', letterSpacing: '0.05em'
+          }}>
+            {data ? data.message : 'Connecting...'}
+          </div>
+        </div>
+
+        {/* ── Globe ── */}
+        <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+          <Viewer
+            ref={viewerRef}
+            full
+            timeline={false}
+            animation={false}
+            homeButton={false}
+            geocoder={false}
+            baseLayerPicker={false}
+            navigationHelpButton={false}
+            sceneModePicker={false}
+            fullscreenButton={false}
+            vrButton={false}
+            selectionIndicator={false}
+            infoBox={false}
+            scene3DOnly={true}
+            imageryProvider={false}
+            creditContainer={document.createElement('div')}
+          >
+            {imageryProvider && <ImageryLayer imageryProvider={imageryProvider} />}
+          </Viewer>
+        </div>
       </div>
+    </div>
+  )
+}
+
+/* ── Small Components ── */
+
+function Stat({ label, value, color }) {
+  return (
+    <div style={{ padding: '18px 20px', borderBottom: '1px solid rgba(255, 255, 255, 0.08)' }}>
+      <div style={{ fontSize: 9, color: '#64748b', fontFamily: 'monospace', letterSpacing: '0.15em', marginBottom: 8 }}>{label}</div>
+      <div style={{ fontSize: 34, fontWeight: 200, color, lineHeight: 1, letterSpacing: '-0.02em', textShadow: `0 0 10px ${color}33` }}>{value}</div>
     </div>
   )
 }

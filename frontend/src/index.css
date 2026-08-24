@@ -1,25 +1,75 @@
 @import "tailwindcss";
 
 @theme {
-  --color-plntr-900: #0F172A;
-  --color-plntr-800: #1E293B;
-  --color-plntr-glow: #38BDF8;
-  --color-plntr-accent: #818CF8;
-  --background-image-grid-pattern: linear-gradient(to right, #1f2937 1px, transparent 1px), linear-gradient(to bottom, #1f2937 1px, transparent 1px);
+  --color-plntr-900: #0a0e1a;
+  --color-plntr-800: #131a2e;
+  --color-plntr-700: #1c2642;
+  --color-plntr-glow: #ffffff;
+  --color-plntr-accent: #e2e8f0;
 }
 
-@layer base {
-  body {
-    @apply bg-plntr-900 text-slate-300 font-sans antialiased overflow-x-hidden;
-  }
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
 }
 
-@layer utilities {
-  .glass-panel {
-    @apply bg-plntr-800/60 backdrop-blur-md border border-slate-700/50 shadow-lg;
-  }
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
 
-  .glow-text {
-    text-shadow: 0 0 10px rgba(56, 189, 248, 0.5);
-  }
+body {
+  background: #0a0e1a;
+  color: #cbd5e1;
+  font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Hide ALL scrollbars globally */
+*::-webkit-scrollbar {
+  display: none;
+}
+
+* {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Override Cesium default styles */
+.cesium-viewer {
+  position: absolute !important;
+  inset: 0 !important;
+}
+
+.cesium-viewer-bottom,
+.cesium-viewer-toolbar,
+.cesium-credit-logoContainer,
+.cesium-credit-textContainer,
+.cesium-credit-expand-link,
+.cesium-viewer .cesium-widget-credits {
+  display: none !important;
+}
+
+.cesium-viewer .cesium-widget canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.glow-text {
+  text-shadow: 0 0 12px rgba(255, 255, 255, 0.35);
+}
+
+.sidebar-card {
+  padding: 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.glass-label {
+  background: rgba(19, 26, 46, 0.75);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(100, 116, 139, 0.2);
 }

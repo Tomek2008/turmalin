@@ -10,8 +10,11 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "cesium": "^1.144.0",
     "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "react-dom": "^19.2.8",
+    "resium": "^1.25.0",
+    "vite-plugin-cesium": "^1.2.23"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",
