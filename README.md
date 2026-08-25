@@ -149,11 +149,30 @@ python submit_hybrid.py
 
 `submit_hybrid.py` składa idealne rozwiązanie: czyta `predictions_tabpfn.csv` (klasy) i dopisuje nasilenie z modelu widmowego GLRT. Domyślnie zapisuje `predictions_hybrid.csv`. Równoważne wywołanie:
 
+
 ```bash
+pip install -r requirements-tabpfn.txt
+
+# 1. TabPFN: klasy na teście → predictions_tabpfn.csv
+python tabpfn_diagnose.py
+
+# 2. GLRT: nasilenie na klasach TabPFN → predictions_hybrid.csv
 python submit_hybrid.py --labels-from predictions_tabpfn.csv --out predictions_hybrid.csv
 ```
 
-`predictions.csv` w tym repozytorium to `predictions_hybrid.csv` po ręcznym rozstrzygnięciu konfliktów TabPFN vs GLRT (`hackaton_engin_ml/labelowanie/`).
+`final_predictions.csv` to `predictions_hybrid.csv` po ręcznym rozstrzygnięciu konfliktów (`labelowanie/`).
+
+Ewaluacja LOEO (odtworzenie tabeli):
+
+```bash
+python evaluate_loeo.py
+```
+
+Lokalny prototyp UI na destylowanym drzewie (nie jest aplikacją konkursową):
+
+```bash
+streamlit run app_tabpfn.py
+```
 
 Ewaluacja LOEO (odtworzenie tabeli):
 
