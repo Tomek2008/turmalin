@@ -160,7 +160,8 @@ python tabpfn_diagnose.py
 python submit_hybrid.py --labels-from predictions_tabpfn.csv --out predictions_hybrid.csv
 ```
 
-`final_predictions.csv` to `predictions_hybrid.csv` po ręcznym rozstrzygnięciu konfliktów (`labelowanie/`).
+`final_predictions.csv` to `predictions_hybrid.csv` po ręcznym rozstrzygnięciu konfliktów (`labelowanie/`). dlatego jak chce ktoś mechaniczne to musi użyc
+`predictions.csv` to nie ludzkie a prawdziwe automatyczne dobre
 
 Ewaluacja LOEO (odtworzenie tabeli):
 
