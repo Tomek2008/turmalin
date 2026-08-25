@@ -1,4 +1,4 @@
-# Turmalin — diagnostyka akustyczna silników Diesla
+# Turmalin: diagnostyka akustyczna silników Diesla
 
 Narzędzie dla inżynierów i mechaników Aesteel: z widma akustycznego wtrysku paliwa (0–20 kHz) rozpoznaje stan cylindra, szacuje nasilenie usterki i pokazuje, *dlaczego* padł taki werdykt.
 
@@ -6,7 +6,7 @@ Projekt jest rozdzielony na dwa repozytoria:
 
 | Rola | Repozytorium |
 |---|---|
-| Aplikacja produkcyjna (UI + serwowanie diagnozy) | **to repozytorium** — [turmalin](https://github.com/Tomek2008/turmalin) |
+| Aplikacja produkcyjna (UI + serwowanie diagnozy) | **to repozytorium**: [turmalin](https://github.com/Tomek2008/turmalin) |
 | Badania, modele, ewaluacja, predykcje | [hackaton_engin_ml](https://github.com/janpopowicz/hackaton_engin_ml) (submoduł `hackaton_engin_ml/`) |
 
 Regulamin zadania, format danych i kryteria oceny: [`hackaton_engin_ml/zasady.md`](hackaton_engin_ml/zasady.md).
@@ -47,9 +47,9 @@ widmo cylindra (mV_0 … mV_20)
                                    predictions.csv
 ```
 
-**Klasa — TabPFN.** Tabular foundation model uczony na etykietowanym `val_full.csv`. W walidacji leave-one-engine-out (LOEO) ma macro-F1 **0.991** — praktycznie sufit zadania (symulacja generatora daje rozróżnialność klas ~0.9999).
+**Klasa: TabPFN.** Tabular foundation model uczony na etykietowanym `val_full.csv`. W walidacji leave-one-engine-out (LOEO) ma macro-F1 **0.991**, praktycznie sufit zadania (symulacja generatora daje rozróżnialność klas ~0.9999).
 
-**Nasilenie — analiza widma (GLRT).** Generatywny model
+**Nasilenie: analiza widma (GLRT).** Generatywny model
 
 ```
 widmo[cyl] = (1 + g) · profil_silnika + a · szablon(klasa) + szum(σ)
@@ -57,7 +57,7 @@ widmo[cyl] = (1 + g) · profil_silnika + a · szablon(klasa) + szum(σ)
 
 Nasilenie to amplituda `a` (rzut residuum na kierunek usterki), nie norma `||r||`. Norma zawiera szum i jitter wzmocnienia (~5%), więc przy usterkach `male` mierzy głównie zakłócenie. Rzut jest nieobciążony; przedziały `male` / `srednie` / `duze` odpowiadają mnożnikom ~1 / ~1.45 / ~2.0. Brakujące prążki są maskowane, nie interpolowane.
 
-**Rozjazdy — człowiek.** Na teście modele zgadzały się w klasie w 99.3% cylindrów. Pozostałe konflikty (klasa albo nasilenie na granicy progu) zostały przejrzane na wykresach widma i residuum; w kilku pojedynczych przypadkach werdykt poprawił człowiek. Ślad tej pracy: [`hackaton_engin_ml/labelowanie/`](hackaton_engin_ml/labelowanie/).
+**Rozjazdy: człowiek.** Na teście modele zgadzały się w klasie w 99.3% cylindrów. Pozostałe konflikty (klasa albo nasilenie na granicy progu) zostały przejrzane na wykresach widma i residuum; w kilku pojedynczych przypadkach werdykt poprawił człowiek. Ślad tej pracy: [`hackaton_engin_ml/labelowanie/`](hackaton_engin_ml/labelowanie/).
 
 Każdy werdykt GLRT jest wielkością fizyczną: nazwa szablonu, amplituda w mV, istotność w sigmach, χ² dopasowania, podświetlone pasmo kHz. To idzie prosto do UI.
 
@@ -68,7 +68,7 @@ Zanim powstała hybryda, te same fałdy LOEO dostały:
 | Model | Rola |
 |---|---|
 | Las losowy | baseline na cechach sygnatur (dołek 9 kHz, odbicie 12 kHz, L2 vs profil silnika, …) |
-| TabPFN | nauczyciel — klasyfikacja |
+| TabPFN | nauczyciel: klasyfikacja |
 | Drzewo destylowane po TabPFN | student: TabPFN etykietuje `train.csv`, płytkie drzewo sklearn uczy się na nazwanych cechach (CPU, ścieżka if/then) |
 | Model widmowy (GLRT) | detekcja + nasilenie z amplitudy |
 | **Hybryda TabPFN + GLRT** | **rozwiązanie końcowe** |
@@ -87,11 +87,11 @@ Metryka konkursowa: `Raw_Score = 0.75 · Macro-F1(label) + 0.25 · Accuracy(seve
 | Model widmowy (GLRT) | 0.990 | 0.947 | 0.979 | [0.945, 1.000] |
 | **Hybryda TabPFN + GLRT** | **0.991** | **0.965** | **0.985** | **[0.961, 1.000]** |
 
-Hybryda vs sam TabPFN: ΔRaw = +0.018 (całość z nasilenia: 6 błędów → 2). Klasa jest remisem — wszystkie trzy najlepsze warianty mylą jeden cylinder z 476. Szczegóły, bootstrap i zastrzeżenia: [`hackaton_engin_ml/wyniki.txt`](hackaton_engin_ml/wyniki.txt).
+Hybryda vs sam TabPFN: ΔRaw = +0.018 (całość z nasilenia: 6 błędów → 2). Klasa jest remisem: wszystkie trzy najlepsze warianty mylą jeden cylinder z 476. Szczegóły, bootstrap i zastrzeżenia: [`hackaton_engin_ml/wyniki.txt`](hackaton_engin_ml/wyniki.txt).
 
 ## Uruchomienie aplikacji
 
-Działa na CPU, bez GPU. Warstwa inferencji: `numpy`, `pandas` — bez PyTorcha, bez TabPFN, bez sklearn.
+Działa na CPU, bez GPU. Warstwa inferencji: `numpy`, `pandas`, bez PyTorcha, bez TabPFN, bez sklearn.
 
 ### Szybki start (Windows)
 
@@ -130,7 +130,7 @@ model = load()                 # backend/spectral_glrt.pkl, raz przy starcie
 payload = predict(engine_df)   # kolumny engine_id, cylinder, mV_0 … mV_20
 ```
 
-Luki (`NaN`) zostawić jak są — model je maskuje.
+Luki (`NaN`) zostawić jak są: model je maskuje.
 
 ## Odtworzenie predykcji (submoduł ML)
 
