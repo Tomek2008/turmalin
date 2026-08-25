@@ -92,17 +92,24 @@ function HeaderClock() {
   )
 }
 
-function MainHeader({ title, onAddClick }) {
+function MainHeader({ title, onLogoClick }) {
   return (
     <header className="main-header">
       <div className="main-header-brand">
-        <img
-          className="main-header-logo"
-          src="/wide_logo.svg"
-          alt="Turmalin"
-          width="2048"
-          height="512"
-        />
+        <button
+          type="button"
+          className="main-header-logo-btn"
+          onClick={onLogoClick}
+          aria-label="Strona główna"
+        >
+          <img
+            className="main-header-logo"
+            src="/wide_logo.svg"
+            alt="Turmalin"
+            width="2048"
+            height="512"
+          />
+        </button>
         {title ? (
           <h1 className="main-header-title" key={title}>
             {title}
@@ -110,11 +117,6 @@ function MainHeader({ title, onAddClick }) {
         ) : null}
       </div>
       <div className="main-header-end">
-        {onAddClick ? (
-          <button type="button" className="main-header-add" onClick={onAddClick}>
-            Nowy zakład przemysłowy
-          </button>
-        ) : null}
         <HeaderClock />
       </div>
     </header>
@@ -344,49 +346,60 @@ function aggregateFleet(factories) {
   return { sev, worst: worstScore >= 0 ? worst : null }
 }
 
-function FleetBar({ factories, onOpenWorst }) {
+function FleetBar({ factories, onOpenWorst, onAddClick }) {
   const { sev, worst } = useMemo(() => aggregateFleet(factories), [factories])
-  if (!factories.length) return null
+  if (!factories.length && !onAddClick) return null
 
   const loc = worst?.factory.location || 'unknown'
   const dist = worst?.factory.distance || 'unknown'
 
   return (
     <div className="fleet-bar">
-      <ul className="fleet-bar-counts">
-        <li className="is-duze">
-          <span>Duże</span>
-          <strong>{sev.duze}</strong>
-        </li>
-        <li className="is-srednie">
-          <span>Średnie</span>
-          <strong>{sev.srednie}</strong>
-        </li>
-        <li className="is-male">
-          <span>Małe</span>
-          <strong>{sev.male}</strong>
-        </li>
-      </ul>
+      {factories.length ? (
+        <ul className="fleet-bar-counts">
+          <li className="is-duze">
+            <span className="fleet-bar-dot" aria-hidden="true" />
+            <span>Duże</span>
+            <strong>{sev.duze}</strong>
+          </li>
+          <li className="is-srednie">
+            <span className="fleet-bar-dot" aria-hidden="true" />
+            <span>Średnie</span>
+            <strong>{sev.srednie}</strong>
+          </li>
+          <li className="is-male">
+            <span className="fleet-bar-dot" aria-hidden="true" />
+            <span>Małe</span>
+            <strong>{sev.male}</strong>
+          </li>
+        </ul>
+      ) : (
+        <span className="fleet-bar-spacer" />
+      )}
+      {onAddClick ? (
+        <button type="button" className="fleet-bar-add" onClick={onAddClick}>
+          Nowy zakład przemysłowy
+        </button>
+      ) : (
+        <span className="fleet-bar-spacer" />
+      )}
       {worst ? (
         <button
           type="button"
           className="fleet-bar-worst"
-          onClick={e => onOpenWorst(worst, e.currentTarget.getBoundingClientRect())}
+          onClick={() => onOpenWorst(worst)}
         >
-          <span className="fleet-bar-kicker">Najgorszy silnik</span>
-          <strong>{worst.engine.engine_id}</strong>
-          <span className="fleet-bar-sep" aria-hidden="true">
-            ·
+          <span className="fleet-bar-worst-main">
+            <span className="fleet-bar-kicker">Najgorszy silnik</span>
+            <strong>{worst.engine.engine_id}</strong>
           </span>
-          <span>{worst.factory.name}</span>
-          <span className="fleet-bar-sep" aria-hidden="true">
-            ·
+          <span className="fleet-bar-worst-meta">
+            <span>{worst.factory.name}</span>
+            <span className="fleet-bar-sep" aria-hidden="true">·</span>
+            <span className="fleet-bar-loc">{loc}</span>
+            <span className="fleet-bar-sep" aria-hidden="true">·</span>
+            <span className="fleet-bar-dist">{dist}</span>
           </span>
-          <span className="fleet-bar-loc">{loc}</span>
-          <span className="fleet-bar-sep" aria-hidden="true">
-            ·
-          </span>
-          <span className="fleet-bar-dist">{dist}</span>
         </button>
       ) : (
         <p className="fleet-bar-ok">Brak usterek</p>
@@ -934,7 +947,7 @@ function MonitoringPanel({
   }, [closing])
 
   useEffect(() => {
-    if (!engineFromRect) {
+    if (!selectedEngineId) {
       setEngineExpanded(false)
       return
     }
@@ -942,7 +955,7 @@ function MonitoringPanel({
       requestAnimationFrame(() => setEngineExpanded(!engineClosing))
     })
     return () => cancelAnimationFrame(id)
-  }, [engineFromRect, engineClosing])
+  }, [selectedEngineId, engineFromRect, engineClosing])
 
   useEffect(() => {
     const onKey = e => {
@@ -973,23 +986,24 @@ function MonitoringPanel({
         borderRadius: 12,
       }
 
-  const showEngine = Boolean(engineFromRect)
+  const showEngine = Boolean(selectedEngineId)
+  const morphEngine = Boolean(engineFromRect) && !closing
   const showEngineExpanded = engineExpanded && !engineClosing
-  const engineShellStyle = showEngine && engineFromRect
-    ? (showEngineExpanded
+  const engineShellStyle = showEngine
+    ? (morphEngine && !showEngineExpanded
       ? {
-          top: headerOffset,
-          left: 0,
-          width: '100vw',
-          height: `calc(100vh - ${headerOffset}px)`,
-          borderRadius: 0,
-        }
-      : {
           top: engineFromRect.top,
           left: engineFromRect.left,
           width: engineFromRect.width,
           height: engineFromRect.height,
           borderRadius: 12,
+        }
+      : {
+          top: headerOffset,
+          left: 0,
+          width: '100vw',
+          height: `calc(100vh - ${headerOffset}px)`,
+          borderRadius: 0,
         })
     : null
 
@@ -1027,6 +1041,7 @@ function MonitoringPanel({
                       <button
                         key={eng.engine_id}
                         type="button"
+                        data-engine-id={eng.engine_id}
                         className={`engine-menu-card${faults ? ' has-fault' : ''}`}
                         style={{ borderTopColor: eng.status_color, '--i': i }}
                         onClick={e => onSelectEngine(eng.engine_id, e.currentTarget.getBoundingClientRect())}
@@ -1052,7 +1067,10 @@ function MonitoringPanel({
       </div>
 
       {showEngine && engineShellStyle && (
-        <div className="monitor-panel-shell engine-detail-shell" style={engineShellStyle}>
+        <div
+          className={`monitor-panel-shell engine-detail-shell${morphEngine ? '' : ' engine-detail-shell--fade'}${showEngineExpanded ? ' is-open' : ''}`}
+          style={engineShellStyle}
+        >
           <div className={`monitor-panel-inner${showEngineExpanded ? ' visible' : ''}`}>
             <div className="monitor-toolbar">
               <button type="button" className="btn-back" onClick={onBackToEngines}>
@@ -1380,7 +1398,7 @@ function EngineDiagram({ engine, selectedCylinder, onCylinderToggle, interactive
         <circle cx={cx} cy={crankY} r="2" fill="#c8c3ba" />
       </g>
 
-      {positions.map(({ num, x, y }) => {
+      {positions.map(({ num, x, y, bank }) => {
         const c = byNum[num]
         if (!c) return null
         const fault = c.label !== 'ok'
@@ -1435,6 +1453,14 @@ function EngineDiagram({ engine, selectedCylinder, onCylinderToggle, interactive
             {fault && (
               <circle className="cyl-dot" r={2.4} fill={color} />
             )}
+            <text
+              className="cyl-index"
+              x={bank === 'L' ? -(R + 4) : R + 4}
+              y="3.5"
+              textAnchor={bank === 'L' ? 'end' : 'start'}
+            >
+              {num}
+            </text>
           </g>
         )
       })}
@@ -1509,7 +1535,7 @@ function App() {
         pendingOpenRef.current = null
         if (pending?.engineId) {
           setSelectedEngineId(pending.engineId)
-          setEngineRect(pending.rect || null)
+          setEngineRect(null)
           setEngineClosing(false)
         } else {
           setSelectedEngineId(null)
@@ -1529,7 +1555,7 @@ function App() {
   }, [selectedFactoryId])
 
   const selectFactory = useCallback((id, rect, engineId = null) => {
-    pendingOpenRef.current = engineId ? { engineId, rect } : null
+    pendingOpenRef.current = engineId ? { engineId } : null
     setSelectedFactoryId(id)
     setSelectedEngineId(null)
     setEngineRect(null)
@@ -1553,8 +1579,11 @@ function App() {
   }
 
   const closePanel = () => {
+    if (selectedEngineId) {
+      setEngineRect(null)
+      setEngineClosing(true)
+    }
     setPanel(p => (p ? { ...p, closing: true } : null))
-    if (selectedEngineId) setEngineClosing(true)
     setTimeout(() => {
       setPanel(null)
       setSelectedFactoryId(null)
@@ -1564,25 +1593,38 @@ function App() {
     }, 520)
   }
 
+  const goHome = () => {
+    setAddOpen(false)
+    if (panel && !panel.closing) closePanel()
+  }
+
   const selectedFactory = factories.find(f => f.id === selectedFactoryId)
   const factoryOpen = Boolean(panel && !panel.closing)
+  const factoryName = selectedFactory?.name || telemetry?.factory_name || ''
   const headerTitle = !factoryOpen
     ? ''
     : (selectedEngineId && !engineClosing)
-      ? selectedEngineId
-      : (selectedFactory?.name || telemetry?.factory_name || 'Ładowanie')
+      ? (factoryName ? `${factoryName} / ${selectedEngineId}` : selectedEngineId)
+      : (factoryName || 'Ładowanie')
 
   return (
     <div className="app">
       <div className="app-header" ref={headerRef}>
-        <MainHeader title={headerTitle} onAddClick={panel ? undefined : () => setAddOpen(true)} />
+        <MainHeader
+          title={headerTitle}
+          onLogoClick={goHome}
+        />
       </div>
 
       <main className="main main--grid-only">
         <section className="grid-pane">
           <FleetBar
             factories={factories}
-            onOpenWorst={(worst, rect) => {
+            onAddClick={() => setAddOpen(true)}
+            onOpenWorst={worst => {
+              const card = document.querySelector(`[data-factory-id="${worst.factory.id}"]`)
+              const rect = card?.getBoundingClientRect()
+              if (!rect) return
               selectFactory(worst.factory.id, rect, worst.engine.engine_id)
             }}
           />
