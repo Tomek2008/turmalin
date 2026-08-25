@@ -1,0 +1,48 @@
+{% extends "admin/base.html" %}
+{% load static %}
+
+{% block title %}{% if subtitle %}{{ subtitle }} | {% endif %}{{ title }} | Turmalin{% endblock %}
+
+{# Jedyny motyw: bez dark_mode.css / theme.js #}
+{% block dark-mode-vars %}
+  <meta name="color-scheme" content="light only" />
+  <script>
+    document.documentElement.setAttribute("data-theme", "light");
+    try {
+      localStorage.setItem("theme", "light");
+      localStorage.setItem("django.admin.theme", "light");
+    } catch (e) {}
+  </script>
+{% endblock %}
+
+{% block extrastyle %}
+  {{ block.super }}
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+    rel="stylesheet"
+  />
+{% endblock %}
+
+{% block extrahead %}
+  {{ block.super }}
+  {# Po login.css / innych stylach admina #}
+  <link rel="stylesheet" href="{% static 'admin/css/turmalin_admin.css' %}" />
+{% endblock %}
+
+{% block branding %}
+  <div id="site-name">
+    <a href="{% url 'admin:index' %}" class="turmalin-brand">
+      <span class="turmalin-mark" aria-hidden="true">TM</span>
+      <span class="turmalin-brand-text">
+        <span class="turmalin-brand-name">Turmalin</span>
+        <span class="turmalin-sub">Admin · diagnostyka AT</span>
+      </span>
+    </a>
+  </div>
+{% endblock %}
+
+{% block nav-global %}{% endblock %}
+
+{% block breadcrumbs %}{% endblock %}

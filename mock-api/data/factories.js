@@ -1,0 +1,88 @@
+export const FACTORIES = [
+  {
+    slug: 'cmc-zawiercie',
+    name: 'CMC Poland - Huta Zawiercie',
+    facility_type: 'Steelworks',
+    address: 'ul. Piłsudskiego 82, 42-400 Zawiercie',
+    description: 'Stalownia EAF - scenariusz demo AT infrastruktury hutniczej',
+    ae_focus: 'Piece łukowe, kadzie, rurociągi technologiczne',
+    lat: 50.4875,
+    lng: 19.4568,
+    image: '/factories/cmc-zawiercie.jpg',
+    notes: 'Obiekt przykładowy - scenariusz demo; brak publicznego potwierdzenia kontraktu AE Steel.',
+    engines: [
+      { engine_id: 'ZAW_V12_01', n_cylinders: 12 },
+      { engine_id: 'ZAW_V8_02', n_cylinders: 8 },
+      { engine_id: 'ZAW_V16_03', n_cylinders: 16 },
+    ],
+  },
+  {
+    slug: 'orlen-plock',
+    name: 'Orlen - Rafineria Płock',
+    facility_type: 'Refinery',
+    address: 'Kompleks rafineryjny, Płock',
+    description: 'Scenariusz demo - emisja akustyczna zbiorników i rurociągów',
+    ae_focus: 'Dna zbiorników pionowych, wycieki, korozja aktywna',
+    lat: 52.5539,
+    lng: 19.68,
+    image: '/factories/orlen-plock.jpg',
+    notes: 'Obiekt przykładowy - scenariusz demo; brak publicznego potwierdzenia kontraktu AE Steel.',
+    engines: [
+      { engine_id: 'PLC_V12_01', n_cylinders: 12 },
+      { engine_id: 'PLC_V8_02', n_cylinders: 8 },
+    ],
+  },
+  {
+    slug: 'celsa-ostrowiec',
+    name: 'CELSA Huta Ostrowiec',
+    facility_type: 'Steelworks',
+    address: 'ul. Samsonowicza 2, 27-400 Ostrowiec Świętokrzyski',
+    description: 'Scenariusz demo - monitoring AT instalacji hutniczych',
+    ae_focus: 'Konstrukcje stalowe, sprężarki, urządzenia ciśnieniowe',
+    lat: 50.9473,
+    lng: 21.4488,
+    image: '/factories/celsa-ostrowiec.jpg',
+    notes: 'Obiekt przykładowy - scenariusz demo; brak publicznego potwierdzenia kontraktu AE Steel.',
+    engines: [
+      { engine_id: 'OST_V16_01', n_cylinders: 16 },
+      { engine_id: 'OST_V12_02', n_cylinders: 12 },
+    ],
+  },
+  {
+    slug: 'pge-belchatow',
+    name: 'PGE - Elektrownia Bełchatów',
+    facility_type: 'Power Plant',
+    address: 'Rogowiec / Bełchatów',
+    description: 'Scenariusz demo - diagnostyka turbogeneratorów metodą AT',
+    ae_focus: 'Transformatory mocy, obiekty ciśnieniowe, SHM',
+    lat: 51.2662,
+    lng: 19.33,
+    image: '/factories/pge-belchatow.jpg',
+    notes: 'Obiekt przykładowy - scenariusz demo; brak publicznego potwierdzenia kontraktu AE Steel.',
+    engines: [
+      { engine_id: 'BEL_V8_01', n_cylinders: 8 },
+      { engine_id: 'BEL_V12_02', n_cylinders: 12 },
+    ],
+  },
+  {
+    slug: 'ms-turmalin',
+    name: 'MS Turmalin - silniki okrętowe',
+    facility_type: 'Ship',
+    address: 'Bałtyk / baza Gdańsk',
+    description: 'Scenariusz demo - diagnostyka AT głównych silników Diesla na jednostce pływającej',
+    ae_focus: 'Silniki napędu głównego V8/V12/V16, wał śrubowy, układy paliwowe',
+    lat: 54.3722,
+    lng: 18.6383,
+    image: '/factories/ms-turmalin.jpg',
+    notes: 'Obiekt przykładowy - scenariusz demo; brak publicznego potwierdzenia kontraktu AE Steel.',
+    engines: [
+      { engine_id: 'SHIP_V16_01', n_cylinders: 16 },
+      { engine_id: 'SHIP_V12_02', n_cylinders: 12 },
+      { engine_id: 'SHIP_V8_03', n_cylinders: 8 },
+    ],
+  },
+]
+
+export function getFactory(slug) {
+  return FACTORIES.find(f => f.slug === slug) ?? null
+}

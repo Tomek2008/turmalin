@@ -1,0 +1,60 @@
+{% extends "admin/index.html" %}
+{% load i18n %}
+
+{% block sidebar %}{% endblock %}
+
+{% block content %}
+<div class="turmalin-dash">
+  <header class="turmalin-dash-hero">
+    <div>
+      <h1>Monitoring AT</h1>
+      <p>
+        Zakłady, silniki i widma z CSV. Diagnoza przez
+        <code>POST /api/predict/</code>.
+      </p>
+    </div>
+    <a class="turmalin-dash-cta" href="{% url 'admin:api_factory_import_csv' %}">
+      Nowy zakład z CSV
+    </a>
+  </header>
+
+  <div class="turmalin-dash-stats">
+    <div class="turmalin-stat">
+      <span class="label">Zakłady</span>
+      <span class="value">{{ turmalin_factory_count }}</span>
+    </div>
+    <div class="turmalin-stat">
+      <span class="label">Aktywne</span>
+      <span class="value">{{ turmalin_active_count }}</span>
+    </div>
+    <div class="turmalin-stat">
+      <span class="label">Silniki</span>
+      <span class="value">{{ turmalin_engine_count }}</span>
+    </div>
+    <div class="turmalin-stat">
+      <span class="label">Z CSV</span>
+      <span class="value">{{ turmalin_csv_count }}</span>
+    </div>
+  </div>
+
+  <div class="turmalin-dash-grid">
+    <a class="turmalin-dash-card" href="{% url 'admin:api_factory_changelist' %}">
+      <strong>Zakłady</strong>
+      <span>Lista, edycja, zdjęcia i plik CSV per zakład.</span>
+    </a>
+    <a class="turmalin-dash-card" href="{% url 'admin:api_demoengine_changelist' %}">
+      <strong>Silniki</strong>
+      <span>Sloty V8 / V12 / V16 przypisane do zakładów.</span>
+    </a>
+    <a class="turmalin-dash-card" href="{% url 'admin:api_factory_import_csv' %}">
+      <strong>Import CSV</strong>
+      <span>engine_id + mV_0…20 → zakład i silniki od razu.</span>
+    </a>
+    {% url 'api:factory-list' as factories_api %}
+    <a class="turmalin-dash-card" href="{{ factories_api }}" target="_blank" rel="noopener">
+      <strong>API</strong>
+      <span><code>{{ factories_api }}</code> · lista zakładów dla frontendu.</span>
+    </a>
+  </div>
+</div>
+{% endblock %}

@@ -15,9 +15,25 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
-from django.urls import path, include
+from django.urls import path, include, re_path
+from django.views.static import serve
+from pathlib import Path
+
+from django.conf import settings
+from django.conf.urls.static import static
+
+FACTORY_IMAGES = Path(settings.BASE_DIR) / "frontend" / "public" / "factories"
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include('api.urls')),
+    # Miniatury zakładów w adminie (te same pliki co frontend/public/factories)
+    re_path(
+        r"^factories/(?P<path>.*)$",
+        serve,
+        {"document_root": FACTORY_IMAGES},
+    ),
 ]
+
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

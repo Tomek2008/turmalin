@@ -1,0 +1,52 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">Start</a>
+  &rsaquo; <a href="{% url 'admin:api_factory_changelist' %}">Zakłady</a>
+  &rsaquo; Nowy zakład z CSV
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="turmalin-import">
+  <div class="turmalin-admin-card turmalin-import-card">
+    <p>
+      Upload tworzy zakład i <strong>wszystkie silniki</strong> z unikalnych
+      <code>engine_id</code> w pliku (np. 20 szt.).
+    </p>
+    <pre class="turmalin-csv-sample">engine_id,cylinder,n_cylinders,mV_0,mV_1,…,mV_20
+train_0000,1,8,36.5,30.8,…
+train_0000,2,8,33.0,26.8,…
+train_0001,1,12,40.1,…</pre>
+    <p class="turmalin-csv-note">
+      <code>n_cylinders</code>: 8, 12 lub 16. Format jak <code>train.csv</code>.
+    </p>
+    <form method="post" enctype="multipart/form-data" novalidate>
+      {% csrf_token %}
+      {% if form.non_field_errors %}
+        <ul class="errorlist">{{ form.non_field_errors }}</ul>
+      {% endif %}
+      <fieldset class="module aligned">
+        {% for field in form %}
+          <div class="form-row{% if field.errors %} errors{% endif %}">
+            <div>
+              {{ field.label_tag }}
+              {{ field }}
+              {% if field.help_text %}
+                <div class="help">{{ field.help_text }}</div>
+              {% endif %}
+              {{ field.errors }}
+            </div>
+          </div>
+        {% endfor %}
+      </fieldset>
+      <div class="submit-row">
+        <input type="submit" value="Utwórz zakład" class="default" />
+        <a href="{% url 'admin:api_factory_changelist' %}" class="closelink">Anuluj</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
