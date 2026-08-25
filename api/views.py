@@ -274,8 +274,25 @@ def get_factories(request):
     return Response(response_data)
 
 
+def _parse_optional_coord(raw, *, label, lo, hi):
+    text = str(raw or "").strip().replace(",", ".")
+    if not text:
+        return None
+    try:
+        val = float(text)
+    except ValueError:
+        from django.core.exceptions import ValidationError
+
+        raise ValidationError(f"{label} musi być liczbą (albo puste = unknown).")
+    if not (lo <= val <= hi):
+        from django.core.exceptions import ValidationError
+
+        raise ValidationError(f"{label} poza zakresem ({lo} … {hi}).")
+    return val
+
+
 def _create_factory_from_upload(request):
-    """POST multipart: name, csv_file (+ opcjonalnie address, description, slug, image)."""
+    """POST multipart: name, csv_file (+ opcjonalnie address, lat, lng, description, slug, image)."""
     from django.core.exceptions import ValidationError
 
     from .csv_import import CSV_FORMAT_HELP, create_factory_from_csv
@@ -293,12 +310,18 @@ def _create_factory_from_upload(request):
         )
 
     try:
+        lat = _parse_optional_coord(request.data.get("lat"), label="lat", lo=-90, hi=90)
+        lng = _parse_optional_coord(request.data.get("lng"), label="lng", lo=-180, hi=180)
+        if (lat is None) ^ (lng is None):
+            raise ValidationError("Podaj lat i lng razem, albo oba puste (unknown).")
         factory, n_engines = create_factory_from_csv(
             name=name,
             uploaded=csv_file,
             slug=(request.data.get("slug") or "").strip(),
             address=(request.data.get("address") or "").strip(),
             description=(request.data.get("description") or "").strip(),
+            lat=lat,
+            lng=lng,
             image=image_file,
         )
     except ValidationError as exc:

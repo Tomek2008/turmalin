@@ -21,12 +21,14 @@ export function fetchFactories() {
 }
 
 /** Nowy zakład z CSV (multipart). */
-export async function createFactory({ name, address, description, slug, csvFile, imageFile }) {
+export async function createFactory({ name, address, description, slug, lat, lng, csvFile, imageFile }) {
   const body = new FormData()
   body.append('name', name)
   if (address) body.append('address', address)
   if (description) body.append('description', description)
   if (slug) body.append('slug', slug)
+  if (lat !== '' && lat != null) body.append('lat', String(lat))
+  if (lng !== '' && lng != null) body.append('lng', String(lng))
   body.append('csv_file', csvFile)
   if (imageFile) body.append('image', imageFile)
 
@@ -104,7 +106,7 @@ function bandFromHighlights(highlights) {
 function buildExplain(p, cyl) {
   const band = bandFromHighlights(p.highlight_khz)
   const [b0, b1] = band
-  const lines = (p.decision || []).filter(line => !String(line).startsWith('Werdykt:'))
+  const lines = (p.decision || []).filter(line => !/Werdykt:/i.test(String(line)))
   const text = lines.length
     ? `Cylinder ${cyl}: ${lines.join(' ')}`
     : `Cylinder ${cyl}: ${p.label}.`
@@ -148,7 +150,7 @@ async function enrichWithPredictions(data) {
     predictions.map(p => [`${p.engine_id}:${p.cylinder}`, p]),
   )
 
-    const enrichedEngines = engines.map(eng => {
+  const enrichedEngines = engines.map(eng => {
     const cylinders = (eng.cylinders || []).map(c => {
       const p = byKey[`${c.engine_id}:${c.cylinder}`] || {
         label: 'ok',

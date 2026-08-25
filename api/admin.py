@@ -60,6 +60,20 @@ class FactoryCsvImportForm(forms.Form):
         help_text="Puste = wygenerowany z nazwy.",
     )
     address = forms.CharField(label="Adres", max_length=300, required=False)
+    lat = forms.FloatField(
+        label="Szerokość (lat)",
+        required=False,
+        min_value=-90,
+        max_value=90,
+        help_text="Puste = unknown. Podaj razem z lng.",
+    )
+    lng = forms.FloatField(
+        label="Długość (lng)",
+        required=False,
+        min_value=-180,
+        max_value=180,
+        help_text="Puste = unknown. Podaj razem z lat.",
+    )
     csv_file = forms.FileField(
         label="Plik CSV",
         help_text=CSV_FORMAT_HELP,
@@ -90,6 +104,8 @@ class FactoryAdmin(admin.ModelAdmin):
                     "name",
                     "slug",
                     "address",
+                    "lat",
+                    "lng",
                     "description",
                 )
             },
@@ -131,23 +147,30 @@ class FactoryAdmin(admin.ModelAdmin):
             from .csv_import import create_factory_from_csv
             from .train_sampler import invalidate_snapshot
 
-            try:
-                with transaction.atomic():
-                    factory, n_engines = create_factory_from_csv(
-                        name=form.cleaned_data["name"],
-                        uploaded=form.cleaned_data["csv_file"],
-                        slug=form.cleaned_data.get("slug") or "",
-                        address=form.cleaned_data.get("address") or "",
+            lat = form.cleaned_data.get("lat")
+            lng = form.cleaned_data.get("lng")
+            if (lat is None) ^ (lng is None):
+                form.add_error("lat", "Podaj lat i lng razem, albo oba puste (unknown).")
+            else:
+                try:
+                    with transaction.atomic():
+                        factory, n_engines = create_factory_from_csv(
+                            name=form.cleaned_data["name"],
+                            uploaded=form.cleaned_data["csv_file"],
+                            slug=form.cleaned_data.get("slug") or "",
+                            address=form.cleaned_data.get("address") or "",
+                            lat=lat,
+                            lng=lng,
+                        )
+                    invalidate_snapshot()
+                    self.message_user(
+                        request,
+                        f"Utworzono zakład „{factory.name}” z {n_engines} silnikami z CSV.",
+                        messages.SUCCESS,
                     )
-                invalidate_snapshot()
-                self.message_user(
-                    request,
-                    f"Utworzono zakład „{factory.name}” z {n_engines} silnikami z CSV.",
-                    messages.SUCCESS,
-                )
-                return redirect("admin:api_factory_change", factory.pk)
-            except ValidationError as exc:
-                form.add_error("csv_file", exc)
+                    return redirect("admin:api_factory_change", factory.pk)
+                except ValidationError as exc:
+                    form.add_error("csv_file", exc)
 
         context = {
             **self.admin_site.each_context(request),

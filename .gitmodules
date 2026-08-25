@@ -1,0 +1,3 @@
+[submodule "hackaton_engin_ml"]
+	path = hackaton_engin_ml
+	url = https://github.com/janpopowicz/hackaton_engin_ml

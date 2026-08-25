@@ -1,9 +1,9 @@
 """
 Warstwa modelu diagnostycznego: widmowy GLRT (backend/glrt_serve.py).
 
-Label + severity + wyjaśnienie fizyczne z dopasowania szablonu usterki
-do residuum względem profilu silnika. Luki w widmie zostają NaN — model
-je maskuje, nie interpoluje.
+Label + severity + łańcuch decyzji (detekcja → kształt → unknown → nasilenie)
+z dopasowania szablonu usterki do residuum względem profilu silnika.
+Luki w widmie zostają NaN — model je maskuje, nie interpoluje.
 """
 
 from __future__ import annotations

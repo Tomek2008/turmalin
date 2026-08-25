@@ -50,6 +50,15 @@ SEV_PL = {
     "nie_dotyczy": "nie dotyczy",
 }
 
+LAB_PL = {
+    "ok": "sprawny",
+    "zakoksowany": "zakoksowany",
+    "lejacy": "lejący",
+    "pompa": "pompa",
+    "iglica": "iglica",
+    "unknown": "inna anomalia (unknown)",
+}
+
 # pasma, które warto podświetlić przy danym szablonie (kHz)
 TEMPLATE_BANDS: dict[str, tuple[int, ...]] = {
     "zakoksowany": (8, 9, 10, 12),
@@ -87,6 +96,7 @@ def _highlight(label: str, residual: np.ndarray) -> list[int]:
 
 
 def _decision_lines(model: SpectralGLRT, row: dict) -> list[str]:
+    """Pełny łańcuch: detekcja → kształt → unknown? → nasilenie → werdykt."""
     z = row["istotnosc_sigma"]
     gof = row["chi_dopasowania"]
     amp = row["amplituda_mV"]
@@ -97,39 +107,89 @@ def _decision_lines(model: SpectralGLRT, row: dict) -> list[str]:
     z_det = model.z_detect_
     z_unk = model.z_unknown_
     gof_max = model.gof_max_
+    cand_pl = LAB_PL.get(cand, cand)
+    lab_pl = LAB_PL.get(lab, lab)
+    sev_pl = SEV_PL.get(sev, sev)
+    shape_ok = gof <= gof_max
+    above_detect = z >= z_det
 
-    lines = [
-        f"Odchylenie od profilu silnika: {z:.1f}σ  "
-        f"(próg usterki {z_det:.1f}σ, próg unknown {z_unk:.1f}σ).",
-        f"Najbliższy kształt w katalogu: {cand}  "
-        f"(χ dopasowania {gof:.2f}, limit {gof_max:.2f}).",
-    ]
-    if reason == "too_weak" or (lab == "ok" and reason != "unknown"):
-        if reason == "too_weak":
-            lines.append("Nie odstaje wystarczająco od reszty jednostki — cylinder sprawny.")
-        elif reason == "bad_shape":
-            lines.append(
-                "Kształt nie pasuje do znanej usterki, a odchylenie nie dosięga "
-                "progu unknown — traktuję jako sprawny."
-            )
-        elif reason == "wrong_sign":
-            lines.append("Dopasowanie ma zły znak (to nie wkład usterki) — cylinder sprawny.")
-        elif reason == "amp_low":
-            lines.append("Amplituda poniżej minimum katalogowego — za słabe na usterkę.")
-        else:
-            lines.append("Cylinder sprawny.")
-    elif lab == "unknown":
+    lines = []
+
+    if above_detect:
         lines.append(
-            "Odstaje wyraźnie, ale żaden szablon z katalogu nie opisuje kształtu "
-            "— inna anomalia (unknown)."
+            f"Detekcja: odchylenie {z:.1f}σ ≥ próg usterki {z_det:.1f}σ "
+            f"— cylinder odstaje od profilu reszty jednostki."
         )
     else:
+        lines.append(
+            f"Detekcja: odchylenie {z:.1f}σ < próg usterki {z_det:.1f}σ "
+            f"— za słabe, żeby uznać za usterkę."
+        )
+
+    if shape_ok:
+        lines.append(
+            f"Kształt: najbliższy szablon to {cand_pl} "
+            f"(χ {gof:.2f} ≤ limit {gof_max:.2f}) — pasuje do katalogu."
+        )
+    else:
+        lines.append(
+            f"Kształt: najbliższy szablon to {cand_pl}, ale "
+            f"χ {gof:.2f} > limit {gof_max:.2f} — nie pasuje do katalogu."
+        )
+
+    if lab in ("zakoksowany", "lejacy", "pompa", "iglica"):
+        lines.append(
+            f"Unknown: odpada. Unknown wymaga σ ≥ {z_unk:.1f}σ oraz złego kształtu "
+            f"(χ > {gof_max:.2f}). Tu kształt jest w katalogu, więc {z:.1f}σ to silna "
+            f"znana usterka, nie unknown."
+        )
         t1, t2 = model.sev_thr_[lab]
         lines.append(
-            f"Amplituda sygnatury {amp:.1f} mV → nasilenie {SEV_PL.get(sev, sev)} "
+            f"Nasilenie: amplituda sygnatury {amp:.1f} mV → {sev_pl} "
             f"(progi {t1:.0f} / {t2:.0f} mV)."
         )
-    lines.append(f"Werdykt: {lab} / {SEV_PL.get(sev, sev)}.")
+        lines.append(f"Werdykt: {lab_pl} / {sev_pl}.")
+        return lines
+
+    if lab == "unknown":
+        lines.append(
+            f"Unknown: σ {z:.1f} ≥ {z_unk:.1f}σ i kształt poza katalogiem "
+            f"— to inna anomalia, nie znana usterka."
+        )
+        lines.append("Nasilenie: nie dotyczy (klasa unknown).")
+        lines.append("Werdykt: unknown / nie dotyczy.")
+        return lines
+
+    if reason == "too_weak":
+        lines.append(
+            f"Unknown: σ {z:.1f} < {z_unk:.1f}σ — za słabe na unknown."
+        )
+    elif reason == "bad_shape":
+        lines.append(
+            f"Unknown: σ {z:.1f} < próg unknown {z_unk:.1f}σ, więc zły kształt "
+            f"traktuję jako szum, nie jako unknown."
+        )
+    elif reason == "wrong_sign":
+        lines.append(
+            "Znak: dopasowanie ma zły znak (to nie wkład usterki) — odrzucam szablon."
+        )
+        lines.append(
+            f"Unknown: σ {z:.1f} < {z_unk:.1f}σ — za słabe na unknown."
+        )
+    elif reason == "amp_low":
+        floor = model.amp_min_.get(cand)
+        floor_txt = f"{floor:.1f} mV" if floor is not None else "minimum katalogowe"
+        lines.append(
+            f"Amplituda: {amp:.1f} mV poniżej {floor_txt} — za słabe na usterkę z katalogu."
+        )
+        lines.append(
+            f"Unknown: σ {z:.1f} < {z_unk:.1f}σ — nie wchodzi w unknown."
+        )
+    else:
+        lines.append("Brak usterki po testach znaku i amplitudy.")
+
+    lines.append("Nasilenie: nie dotyczy.")
+    lines.append("Werdykt: sprawny.")
     return lines
 
 

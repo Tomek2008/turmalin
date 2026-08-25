@@ -315,6 +315,86 @@ function FactoryHoverOverlay({ factory, engines }) {
   )
 }
 
+function previewEngineScore(engine) {
+  const sc = engine.severity_counts || {}
+  const duze = sc.duze || 0
+  const srednie = sc.srednie || 0
+  const male = sc.male || 0
+  if (duze + srednie + male === 0) return -1
+  return duze * 1_000_000 + srednie * 1_000 + male
+}
+
+function aggregateFleet(factories) {
+  const sev = { duze: 0, srednie: 0, male: 0 }
+  let worst = null
+  let worstScore = -1
+  for (const f of factories) {
+    for (const e of f.engines || []) {
+      const sc = e.severity_counts || {}
+      sev.duze += sc.duze || 0
+      sev.srednie += sc.srednie || 0
+      sev.male += sc.male || 0
+      const score = previewEngineScore(e)
+      if (score > worstScore) {
+        worstScore = score
+        worst = { factory: f, engine: e }
+      }
+    }
+  }
+  return { sev, worst: worstScore >= 0 ? worst : null }
+}
+
+function FleetBar({ factories, onOpenWorst }) {
+  const { sev, worst } = useMemo(() => aggregateFleet(factories), [factories])
+  if (!factories.length) return null
+
+  const loc = worst?.factory.location || 'unknown'
+  const dist = worst?.factory.distance || 'unknown'
+
+  return (
+    <div className="fleet-bar">
+      <ul className="fleet-bar-counts">
+        <li className="is-duze">
+          <span>Duże</span>
+          <strong>{sev.duze}</strong>
+        </li>
+        <li className="is-srednie">
+          <span>Średnie</span>
+          <strong>{sev.srednie}</strong>
+        </li>
+        <li className="is-male">
+          <span>Małe</span>
+          <strong>{sev.male}</strong>
+        </li>
+      </ul>
+      {worst ? (
+        <button
+          type="button"
+          className="fleet-bar-worst"
+          onClick={e => onOpenWorst(worst, e.currentTarget.getBoundingClientRect())}
+        >
+          <span className="fleet-bar-kicker">Najgorszy silnik</span>
+          <strong>{worst.engine.engine_id}</strong>
+          <span className="fleet-bar-sep" aria-hidden="true">
+            ·
+          </span>
+          <span>{worst.factory.name}</span>
+          <span className="fleet-bar-sep" aria-hidden="true">
+            ·
+          </span>
+          <span className="fleet-bar-loc">{loc}</span>
+          <span className="fleet-bar-sep" aria-hidden="true">
+            ·
+          </span>
+          <span className="fleet-bar-dist">{dist}</span>
+        </button>
+      ) : (
+        <p className="fleet-bar-ok">Brak usterek</p>
+      )}
+    </div>
+  )
+}
+
 const FactoryCard = memo(function FactoryCard({ factory: f, selected, onSelect }) {
   const engines = f.engines || []
 
@@ -322,6 +402,7 @@ const FactoryCard = memo(function FactoryCard({ factory: f, selected, onSelect }
     <button
       type="button"
       className={`factory-card${selected ? ' active' : ''}`}
+      data-factory-id={f.id}
       onClick={e => onSelect(f.id, e.currentTarget.getBoundingClientRect())}
     >
       <div className="factory-card-media">
@@ -377,6 +458,8 @@ const FactoryGrid = memo(function FactoryGrid({ factories, selectedId, onSelect,
 function AddFactoryModal({ open, onClose, onCreated }) {
   const [name, setName] = useState('')
   const [address, setAddress] = useState('')
+  const [lat, setLat] = useState('')
+  const [lng, setLng] = useState('')
   const [description, setDescription] = useState('')
   const [csvFile, setCsvFile] = useState(null)
   const [imageFile, setImageFile] = useState(null)
@@ -390,6 +473,8 @@ function AddFactoryModal({ open, onClose, onCreated }) {
     if (!open) return
     setName('')
     setAddress('')
+    setLat('')
+    setLng('')
     setDescription('')
     setCsvFile(null)
     setImageFile(null)
@@ -432,12 +517,20 @@ function AddFactoryModal({ open, onClose, onCreated }) {
       setError('Wybierz plik CSV.')
       return
     }
+    const latTrim = lat.trim()
+    const lngTrim = lng.trim()
+    if (Boolean(latTrim) !== Boolean(lngTrim)) {
+      setError('Podaj lat i lng razem, albo oba puste (unknown).')
+      return
+    }
     setBusy(true)
     setError('')
     try {
       const created = await createFactory({
         name: name.trim(),
         address: address.trim(),
+        lat: latTrim,
+        lng: lngTrim,
         description: description.trim(),
         csvFile,
         imageFile,
@@ -484,6 +577,32 @@ function AddFactoryModal({ open, onClose, onCreated }) {
             disabled={busy}
           />
         </label>
+
+        <div className="factory-modal-row">
+          <label className="factory-modal-field">
+            <span>Szerokość (lat)</span>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={lat}
+              onChange={e => setLat(e.target.value)}
+              placeholder="np. 50.4875"
+              disabled={busy}
+            />
+          </label>
+          <label className="factory-modal-field">
+            <span>Długość (lng)</span>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={lng}
+              onChange={e => setLng(e.target.value)}
+              placeholder="np. 19.4568"
+              disabled={busy}
+            />
+          </label>
+        </div>
+        <em className="factory-modal-help">Puste lat i lng = lokalizacja unknown. Baza: Zawiercie.</em>
 
         <label className="factory-modal-field">
           <span>Opis</span>
@@ -1359,6 +1478,7 @@ function App() {
   const [headerOffset, setHeaderOffset] = useState(72)
   const [addOpen, setAddOpen] = useState(false)
   const headerRef = useRef(null)
+  const pendingOpenRef = useRef(null)
 
   useEffect(() => {
     const el = headerRef.current
@@ -1385,9 +1505,17 @@ function App() {
       .then(d => {
         if (cancelled) return
         setTelemetry(d)
-        setSelectedEngineId(null)
-        setEngineRect(null)
-        setEngineClosing(false)
+        const pending = pendingOpenRef.current
+        pendingOpenRef.current = null
+        if (pending?.engineId) {
+          setSelectedEngineId(pending.engineId)
+          setEngineRect(pending.rect || null)
+          setEngineClosing(false)
+        } else {
+          setSelectedEngineId(null)
+          setEngineRect(null)
+          setEngineClosing(false)
+        }
       })
       .catch(() => {})
       .finally(() => {
@@ -1400,7 +1528,8 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedFactoryId])
 
-  const selectFactory = useCallback((id, rect) => {
+  const selectFactory = useCallback((id, rect, engineId = null) => {
+    pendingOpenRef.current = engineId ? { engineId, rect } : null
     setSelectedFactoryId(id)
     setSelectedEngineId(null)
     setEngineRect(null)
@@ -1451,6 +1580,12 @@ function App() {
 
       <main className="main main--grid-only">
         <section className="grid-pane">
+          <FleetBar
+            factories={factories}
+            onOpenWorst={(worst, rect) => {
+              selectFactory(worst.factory.id, rect, worst.engine.engine_id)
+            }}
+          />
           <FactoryGrid
             factories={factories}
             selectedId={selectedFactoryId}

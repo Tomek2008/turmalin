@@ -174,6 +174,8 @@ def create_factory_from_csv(
     slug: str = "",
     address: str = "",
     description: str = "",
+    lat: float | None = None,
+    lng: float | None = None,
     image=None,
 ) -> tuple[Factory, int]:
     rows = parse_factory_csv(uploaded)
@@ -193,6 +195,8 @@ def create_factory_from_csv(
         slug=slug,
         address=(address or "").strip(),
         description=(description or "").strip(),
+        lat=lat,
+        lng=lng,
         image_url=image_url,
         is_active=True,
         sort_order=(max_sort or 0) + 1,
