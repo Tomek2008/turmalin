@@ -25,7 +25,7 @@ test_0000,1,ok,nie_dotyczy
 Kolumny: `engine_id`, `cylinder`, `label`, `severity`.
 Dla `ok` i `unknown` nasilenie jest zawsze `nie_dotyczy`; dla pozostałych klas: `male` / `srednie` / `duze`.
 
-Źródło: `hackaton_engin_ml/final_predictions.csv` (hybryda TabPFN + GLRT po ręcznym rozstrzygnięciu konfliktów).
+Źródło: `hackaton_engin_ml/predictions_hybrid.csv` po ręcznym rozstrzygnięciu konfliktów (`hackaton_engin_ml/labelowanie/`).
 
 ## Rozwiązanie
 
@@ -132,9 +132,9 @@ payload = predict(engine_df)   # kolumny engine_id, cylinder, mV_0 … mV_20
 
 Luki (`NaN`) zostawić jak są: model je maskuje.
 
-## Odtworzenie predykcji (submoduł ML)
+## Jak uzyskać `predictions.csv`
 
-Python 3.10+, środowisko z [`hackaton_engin_ml/requirements-tabpfn.txt`](hackaton_engin_ml/requirements-tabpfn.txt).
+Python 3.10+, środowisko z [`hackaton_engin_ml/requirements-tabpfn.txt`](hackaton_engin_ml/requirements-tabpfn.txt). Całość dzieje się w submodule ML:
 
 ```bash
 cd hackaton_engin_ml
@@ -143,11 +143,17 @@ pip install -r requirements-tabpfn.txt
 # 1. TabPFN: klasy na teście → predictions_tabpfn.csv
 python tabpfn_diagnose.py
 
-# 2. GLRT: nasilenie na klasach TabPFN → predictions.csv
-python submit_hybrid.py --labels-from predictions_tabpfn.csv --out predictions.csv
+# 2. submit_hybrid.py: klasa z TabPFN + nasilenie z GLRT → predictions_hybrid.csv
+python submit_hybrid.py
 ```
 
-`predictions.csv` w tym repozytorium to hybryda po ręcznym rozstrzygnięciu konfliktów (`hackaton_engin_ml/labelowanie/`).
+`submit_hybrid.py` składa idealne rozwiązanie: czyta `predictions_tabpfn.csv` (klasy) i dopisuje nasilenie z modelu widmowego GLRT. Domyślnie zapisuje `predictions_hybrid.csv`. Równoważne wywołanie:
+
+```bash
+python submit_hybrid.py --labels-from predictions_tabpfn.csv --out predictions_hybrid.csv
+```
+
+`predictions.csv` w tym repozytorium to `predictions_hybrid.csv` po ręcznym rozstrzygnięciu konfliktów TabPFN vs GLRT (`hackaton_engin_ml/labelowanie/`).
 
 Ewaluacja LOEO (odtworzenie tabeli):
 
