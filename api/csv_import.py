@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import io
+from pathlib import Path
 
 from django.core.exceptions import ValidationError
 from django.utils.text import slugify
@@ -144,6 +145,28 @@ def sync_engines_from_csv(factory: Factory, rows: list[dict] | None = None) -> i
     return len(specs)
 
 
+def _save_factory_image(slug: str, uploaded) -> str:
+    """Zapisuje zdjęcie do frontend/public/factories/ i zwraca ścieżkę /factories/…"""
+    from django.conf import settings
+
+    name = getattr(uploaded, "name", "") or "image.jpg"
+    ext = Path(name).suffix.lower()
+    if ext not in {".jpg", ".jpeg", ".png", ".webp"}:
+        raise ValidationError("Zdjęcie: dozwolone JPG, PNG lub WebP.")
+    if ext == ".jpeg":
+        ext = ".jpg"
+
+    dest_dir = Path(settings.BASE_DIR) / "frontend" / "public" / "factories"
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    dest = dest_dir / f"{slug}{ext}"
+    if hasattr(uploaded, "seek"):
+        uploaded.seek(0)
+    with dest.open("wb") as out:
+        for chunk in uploaded.chunks():
+            out.write(chunk)
+    return f"/factories/{slug}{ext}"
+
+
 def create_factory_from_csv(
     *,
     name: str,
@@ -151,6 +174,7 @@ def create_factory_from_csv(
     slug: str = "",
     address: str = "",
     description: str = "",
+    image=None,
 ) -> tuple[Factory, int]:
     rows = parse_factory_csv(uploaded)
     slug = (slug or "").strip() or unique_factory_slug(name)
@@ -160,11 +184,16 @@ def create_factory_from_csv(
     max_sort = (
         Factory.objects.order_by("-sort_order").values_list("sort_order", flat=True).first()
     )
+    image_url = ""
+    if image:
+        image_url = _save_factory_image(slug, image)
+
     factory = Factory(
         name=name.strip(),
         slug=slug,
         address=(address or "").strip(),
         description=(description or "").strip(),
+        image_url=image_url,
         is_active=True,
         sort_order=(max_sort or 0) + 1,
     )

@@ -72,126 +72,47 @@ export function predictLabel(payload, predictUrl) {
   })
 }
 
-function interpolateSpectrum(row) {
-  const out = Array.from({ length: 21 }, (_, i) => {
+function spectrumPayload(row) {
+  return Array.from({ length: 21 }, (_, i) => {
     const v = row[`mV_${i}`]
     if (v == null || v === '') return null
     const n = Number(v)
     return Number.isFinite(n) ? n : null
   })
-  let i = 0
-  while (i < 21) {
-    if (out[i] != null) {
-      i += 1
-      continue
-    }
-    const start = i - 1
-    let j = i
-    while (j < 21 && out[j] == null) j += 1
-    const left = start >= 0 ? out[start] : null
-    const right = j < 21 ? out[j] : null
-    const gap = j - start - 1
-    if (gap > 0) {
-      if (left != null && right != null) {
-        for (let k = 1; k <= gap; k++) out[start + k] = left + ((right - left) * k) / (gap + 1)
-      } else if (left != null) {
-        for (let k = 1; k <= gap; k++) out[start + k] = left
-      } else if (right != null) {
-        for (let k = 1; k <= gap; k++) out[start + k] = right
-      } else {
-        for (let k = 1; k <= gap; k++) out[start + k] = 10
-      }
-    }
-    i = j
-  }
-  return out.map(v => (v == null ? 10 : v))
+}
+
+function roundBin(v) {
+  if (v == null || v === '') return null
+  const n = Number(v)
+  return Number.isFinite(n) ? Math.round(n * 100) / 100 : null
 }
 
 function medianSpectrum(cylinders) {
   return Array.from({ length: 21 }, (_, f) => {
     const vals = cylinders.map(c => c[`mV_${f}`]).filter(v => v != null).sort((a, b) => a - b)
-    if (!vals.length) return 10
+    if (!vals.length) return null
     return vals[Math.floor(vals.length / 2)]
   })
 }
 
-function anomalyBandFromPeak(spectrum, healthyMedian) {
-  const ratios = spectrum.map((val, f) => {
-    const med = healthyMedian[f]
-    return [f, med > 0.5 ? val / med : 1]
-  })
-  ratios.sort((a, b) => b[1] - a[1])
-  const peak = ratios[0][0]
-  return [Math.max(0, peak - 2), Math.min(20, peak + 3)]
+function bandFromHighlights(highlights) {
+  const freqs = (highlights || []).map(Number).filter(n => Number.isFinite(n))
+  if (!freqs.length) return [0, 0]
+  return [Math.max(0, Math.min(...freqs)), Math.min(20, Math.max(...freqs))]
 }
 
-/** Pasmo z cech drzewa (residual_k / dip_18), nie z peak ratio. */
-function anomalyBandFromPath(decisionPath, spectrum, healthyMedian) {
-  const freqs = []
-  for (const step of decisionPath || []) {
-    const feat = step.feature || ''
-    const mRes = /^residual_(\d+)$/.exec(feat)
-    if (mRes) {
-      freqs.push(Number(mRes[1]))
-      continue
-    }
-    if (feat === 'dip_18') freqs.push(17, 18, 19)
-  }
-  if (!freqs.length) return anomalyBandFromPeak(spectrum, healthyMedian)
-  const lo = Math.min(...freqs)
-  const hi = Math.max(...freqs)
-  return [Math.max(0, lo - 1), Math.min(20, hi + 1)]
-}
-
-function buildExplain(label, severity, cyl, spectrum, healthyMedian, band, decisionPath) {
+function buildExplain(p, cyl) {
+  const band = bandFromHighlights(p.highlight_khz)
   const [b0, b1] = band
-  const bandVals = spectrum.slice(b0, b1 + 1)
-  const medVals = healthyMedian.slice(b0, b1 + 1)
-  const amp = bandVals.reduce((s, v) => s + v, 0) / Math.max(bandVals.length, 1)
-  const med = medVals.reduce((s, v) => s + v, 0) / Math.max(medVals.length, 1)
-  const ratio = med > 0.1 ? Math.round((amp / med) * 10) / 10 : 1
-
-  const pathFreqs = (decisionPath || [])
-    .map(s => {
-      const m = /^residual_(\d+)$/.exec(s.feature || '')
-      return m ? Number(m[1]) : s.feature === 'dip_18' ? 18 : null
-    })
-    .filter(f => f != null)
-  const keyFreq =
-    pathFreqs.length > 0 ? [...new Set(pathFreqs)].sort((a, b) => a - b).join(', ') : null
-
-  const bandTxt = b0 === b1 ? `${b0} kHz` : `${b0}–${b1} kHz`
-  const reasons = {
-    zakoksowany: keyFreq
-      ? `drzewo: odchyłka w paśmie ${keyFreq} kHz (zakoksowany)`
-      : `podwyższona energia w paśmie ${bandTxt}`,
-    lejacy: keyFreq
-      ? `drzewo: odchyłka / podobieństwo — pasmo ${keyFreq} kHz (lejący)`
-      : `płaskie podwyższenie widma w paśmie ${bandTxt}`,
-    pompa: keyFreq
-      ? `drzewo: odchyłka w paśmie ${keyFreq} kHz (pompa)`
-      : `lokalny spike w paśmie ${bandTxt}`,
-    iglica: keyFreq
-      ? `drzewo: odchyłka w paśmie ${keyFreq} kHz (iglica)`
-      : `ostry pik w paśmie ${bandTxt}`,
-    unknown: keyFreq
-      ? `drzewo: nietypowy kształt — pasmo ${keyFreq} kHz`
-      : `nietypowy kształt widma w paśmie ${bandTxt}`,
-    ok: 'widmo zgodne z medianą zdrowych cylindrów jednostki',
-  }
-  const reason = reasons[label] || reasons.unknown
-  const sevPl = { male: 'małe', srednie: 'średnie', duze: 'duże', nie_dotyczy: 'nie dotyczy' }
-  const sevTxt = sevPl[severity] || severity
-  const text =
-    label === 'ok'
-      ? `Cylinder ${cyl}: ok - ${reason}.`
-      : `Cylinder ${cyl}: ${label} / ${sevTxt} - ${reason}; amplituda w ${bandTxt} ok. ${ratio}× vs mediana OK.`
-
+  const lines = (p.decision || []).filter(line => !String(line).startsWith('Werdykt:'))
+  const text = lines.length
+    ? `Cylinder ${cyl}: ${lines.join(' ')}`
+    : `Cylinder ${cyl}: ${p.label}.`
   return {
     anomaly_band: [b0, b1],
-    ratio_vs_median: ratio,
+    ratio_vs_median: null,
     text,
-    rule: reason,
+    rule: lines[0] || '',
   }
 }
 
@@ -201,7 +122,7 @@ async function enrichWithPredictions(data) {
   for (const eng of engines) {
     for (const c of eng.cylinders || []) {
       items.push({
-        spectrum: interpolateSpectrum(c),
+        spectrum: spectrumPayload(c),
         engine_id: c.engine_id,
         cylinder: c.cylinder,
         n_cylinders: c.n_cylinders,
@@ -229,52 +150,45 @@ async function enrichWithPredictions(data) {
 
     const enrichedEngines = engines.map(eng => {
     const cylinders = (eng.cylinders || []).map(c => {
-      const spectrum = interpolateSpectrum(c)
       const p = byKey[`${c.engine_id}:${c.cylinder}`] || {
         label: 'ok',
         severity: 'nie_dotyczy',
       }
-      const filled = Object.fromEntries(
-        spectrum.map((v, i) => [`mV_${i}`, Math.round(v * 100) / 100]),
+      const bins = Object.fromEntries(
+        Array.from({ length: 21 }, (_, i) => [`mV_${i}`, roundBin(c[`mV_${i}`])]),
       )
       return {
         engine_id: c.engine_id,
         cylinder: c.cylinder,
         n_cylinders: c.n_cylinders,
-        ...filled,
+        ...bins,
         label: p.label,
         severity: p.severity,
-        decision_path: p.decision_path || [],
-        features: p.features || null,
+        decision: p.decision || [],
+        highlight_khz: p.highlight_khz || [],
+        amplituda_mV: p.amplituda_mV,
+        istotnosc_sigma: p.istotnosc_sigma,
+        chi_dopasowania: p.chi_dopasowania,
+        szablon: p.szablon,
+        profile_mV: p.profile_mV || null,
+        residual_mV: p.residual_mV || null,
+        fitted_fault_mV: p.fitted_fault_mV || null,
       }
     })
 
-    // Mediana zdrowych cylindrów — zawsze per silnik (po etykietach z predict)
+    const fromProfile = cylinders.find(c => Array.isArray(c.profile_mV) && c.profile_mV.some(v => v != null))
     const healthy = cylinders.filter(c => c.label === 'ok')
-    const medianArr = medianSpectrum(healthy.length ? healthy : cylinders)
+    const medianArr = fromProfile
+      ? fromProfile.profile_mV.map(v => roundBin(v))
+      : medianSpectrum(healthy.length ? healthy : cylinders)
     const healthyMedian = Object.fromEntries(
-      medianArr.map((v, i) => [`mV_${i}`, Math.round(v * 100) / 100]),
+      medianArr.map((v, i) => [`mV_${i}`, roundBin(v)]),
     )
 
-    const withExplain = cylinders.map(c => {
-      const spectrum = Array.from({ length: 21 }, (_, i) => c[`mV_${i}`])
-      const band =
-        c.label !== 'ok'
-          ? anomalyBandFromPath(c.decision_path, spectrum, medianArr)
-          : null
-      return {
-        ...c,
-        explanation: buildExplain(
-          c.label,
-          c.severity,
-          c.cylinder,
-          spectrum,
-          medianArr,
-          band || [0, 0],
-          c.decision_path,
-        ),
-      }
-    })
+    const withExplain = cylinders.map(c => ({
+      ...c,
+      explanation: buildExplain(c, c.cylinder),
+    }))
 
     return {
       ...eng,

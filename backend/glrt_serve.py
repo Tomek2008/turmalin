@@ -37,7 +37,11 @@ import pandas as pd
 from physics_diagnose import FREQ_COLS, SpectralGLRT
 
 BASE = Path(__file__).resolve().parent
-DEFAULT_MODEL = BASE / "artifacts" / "spectral_glrt.pkl"
+_CANDIDATES = (
+    BASE / "spectral_glrt.pkl",
+    BASE / "artifacts" / "spectral_glrt.pkl",
+)
+DEFAULT_MODEL = next((p for p in _CANDIDATES if p.exists()), _CANDIDATES[0])
 
 SEV_PL = {
     "male": "małe",

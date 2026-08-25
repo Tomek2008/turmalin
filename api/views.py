@@ -367,14 +367,16 @@ def get_factory_detail(request, factory_id):
 @permission_classes([AllowAny])
 def predict_label(request):
     """
-    Predykcja etykiety dla widma cylindra.
+    Predykcja etykiety GLRT dla widma cylindra.
 
     Body (JSON), jedna z form:
       { "spectrum": [mV_0, …, mV_20], "n_cylinders"?, "engine_id"?, "cylinder"? }
       { "mV_0": …, "mV_20": …, ... }
 
-    Batch:
+    Batch (preferowany — profil silnika z wszystkich cylindrów jednostki):
       { "items": [ {…}, {…} ] }
+
+    Luki (null) zostaw puste — model je maskuje.
     """
     from .model import predict, predict_batch
 

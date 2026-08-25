@@ -55,6 +55,7 @@ function sortEnginesByHealth(engines) {
 
 const CHART_GRID = 'rgba(0,0,0,0.06)'
 const CHART_MEDIAN = '#9a9590'
+const CHART_RECON = '#2f4f66'
 
 function formatNowDate(d) {
   return d.toLocaleDateString('pl-PL', {
@@ -575,397 +576,61 @@ function AddFactoryModal({ open, onClose, onCreated }) {
   )
 }
 
-function formatPathValue(v) {
-  if (typeof v !== 'number' || Number.isNaN(v)) return '—'
-  const abs = Math.abs(v)
-  if (abs >= 100) return v.toFixed(1)
-  if (abs >= 10) return v.toFixed(2)
-  return v.toFixed(3)
+function highlightFreqs(cylinder) {
+  if (cylinder.label === 'ok') return []
+  return [...new Set((cylinder.highlight_khz || []).map(Number).filter(n => Number.isFinite(n) && n >= 0 && n <= 20))]
 }
 
-const TREE_LEAF_COLOR = {
-  ok: '#2d6a4f',
-  zakoksowany: '#9a6700',
-  lejacy: '#9a6700',
-  pompa: '#b42318',
-  iglica: '#b42318',
-  unknown: '#6b6560',
+function HighlightBands({ freqs, toX, padTop, plotH, color }) {
+  const binW = Math.max(toX(1) - toX(0), 4)
+  return freqs.map(f => (
+    <rect
+      key={f}
+      x={toX(f) - binW / 2}
+      y={padTop}
+      width={binW}
+      height={plotH}
+      fill={`${color}22`}
+    />
+  ))
+}
+function binValues(values, length = 21) {
+  return Array.from({ length }, (_, i) => {
+    const v = values?.[i]
+    if (v == null || v === '') return null
+    const n = Number(v)
+    return Number.isFinite(n) ? n : null
+  })
 }
 
-/** Pełne drzewo label (zgodne z api/tree_model.py). left = ≤, right = > */
-const LABEL_DECISION_TREE = {
-  id: 'n0',
-  feature: 'residual_9',
-  title: 'Odchyłka od profilu',
-  subtitle: 'pasmo 9 kHz',
-  threshold: -8.43,
-  left: {
-    id: 'n1',
-    feature: 'sim_zakoksowany',
-    title: 'Podobieństwo',
-    subtitle: 'wzorzec: zakoksowany',
-    threshold: 0.81,
-    left: {
-      id: 'n2',
-      feature: 'sim_lejacy',
-      title: 'Podobieństwo',
-      subtitle: 'wzorzec: lejący',
-      threshold: 0.98,
-      left: {
-        id: 'n3',
-        feature: 'sim_iglica',
-        title: 'Podobieństwo',
-        subtitle: 'wzorzec: iglica',
-        threshold: 0.93,
-        left: {
-          id: 'n4',
-          feature: 'sim_pompa',
-          title: 'Podobieństwo',
-          subtitle: 'wzorzec: pompa',
-          threshold: 0.88,
-          left: {
-            id: 'n5',
-            feature: 'l2',
-            title: 'Odległość od profilu',
-            subtitle: 'całe widmo (L2)',
-            threshold: 41.81,
-            left: { id: 'l_ok_a', leaf: 'ok' },
-            right: { id: 'l_unk_a', leaf: 'unknown' },
-          },
-          right: { id: 'l_pompa_a', leaf: 'pompa' },
-        },
-        right: { id: 'l_iglica', leaf: 'iglica' },
-      },
-      right: { id: 'l_lejacy', leaf: 'lejacy' },
-    },
-    right: { id: 'l_zakoks', leaf: 'zakoksowany' },
-  },
-  right: {
-    id: 'n6',
-    feature: 'l2',
-    title: 'Odległość od profilu',
-    subtitle: 'całe widmo (L2)',
-    threshold: 34.02,
-    left: {
-      id: 'n7',
-      feature: 'residual_13',
-      title: 'Odchyłka od profilu',
-      subtitle: 'pasmo 13 kHz',
-      threshold: -7.34,
-      left: {
-        id: 'n8',
-        feature: 'residual_0',
-        title: 'Odchyłka od profilu',
-        subtitle: 'pasmo 0 kHz',
-        threshold: -2.46,
-        left: { id: 'l_ok_b', leaf: 'ok' },
-        right: { id: 'l_pompa_b', leaf: 'pompa' },
-      },
-      right: { id: 'l_ok_c', leaf: 'ok' },
-    },
-    right: { id: 'l_unk_b', leaf: 'unknown' },
-  },
-}
-
-function getDecisionTrail(path) {
-  const ids = ['n0']
-  const steps = []
-  let node = LABEL_DECISION_TREE
-  for (const step of path || []) {
-    if (!node || node.leaf) break
-    const goLeft = step.branch === '<='
-    const child = goLeft ? node.left : node.right
-    steps.push({
-      fromId: node.id,
-      toId: child?.id,
-      side: goLeft ? '≤' : '>',
-      feature: step.feature,
-      title: node.title,
-      subtitle: node.subtitle,
-      threshold: node.threshold,
-      value: step.value,
-      branch: step.branch,
-    })
-    node = child
-    if (node) ids.push(node.id)
+function gappedPath(vals, toX, toY) {
+  const parts = []
+  let run = []
+  const flush = () => {
+    if (run.length >= 2) parts.push(`M ${run.join(' L ')}`)
+    run = []
   }
-  return { ids, steps, leafId: ids[ids.length - 1] }
+  ;(vals || []).forEach((v, f) => {
+    if (v == null) flush()
+    else run.push(`${toX(f)},${toY(v)}`)
+  })
+  flush()
+  return parts.join(' ')
 }
 
-function layoutDecisionTree(root, { xGap = 22, yGap = 118, nodeW = 176, leafW = 112 } = {}) {
-  const positions = new Map()
-
-  function subtreeWidth(node) {
-    if (node.leaf) return leafW
-    return subtreeWidth(node.left) + xGap + subtreeWidth(node.right)
+function gapEdgeDots(vals) {
+  const dots = []
+  const n = vals.length
+  for (let f = 0; f < n; f++) {
+    if (vals[f] == null) continue
+    const leftGap = f > 0 && vals[f - 1] == null
+    const rightGap = f < n - 1 && vals[f + 1] == null
+    if (leftGap || rightGap) dots.push(f)
   }
-
-  function place(node, left, depth) {
-    const w = subtreeWidth(node)
-    const cx = left + w / 2
-    const y = 28 + depth * yGap
-    if (node.leaf) {
-      positions.set(node.id, { x: cx, y, node, w: leafW })
-      return
-    }
-    positions.set(node.id, { x: cx, y, node, w: nodeW })
-    const lw = subtreeWidth(node.left)
-    place(node.left, left, depth + 1)
-    place(node.right, left + lw + xGap, depth + 1)
-  }
-
-  const totalW = subtreeWidth(root)
-  place(root, 0, 0)
-
-  let maxY = 0
-  for (const p of positions.values()) maxY = Math.max(maxY, p.y)
-  return {
-    positions,
-    width: totalW,
-    height: maxY + 40,
-    nodeW,
-    leafW,
-  }
+  return dots
 }
 
-function DecisionTreeSvg({ path, label }) {
-  const uid = useId().replace(/:/g, '')
-  const glowId = `tree-glow-${uid}`
-  const trail = useMemo(() => getDecisionTrail(path), [path])
-  const layout = useMemo(() => layoutDecisionTree(LABEL_DECISION_TREE), [])
-  const { positions, width, height } = layout
-  const padX = 28
-  const padY = 24
-  const vbW = width + padX * 2
-  const vbH = height + padY * 2
-
-  // revealedNodeCount: ile węzłów ze ścieżki już widać (min 1 = root)
-  // revealedEdgeCount: ile krawędzi ścieżki już narysowano
-  // decidingId: węzeł właśnie oceniany
-  const [revealedNodeCount, setRevealedNodeCount] = useState(1)
-  const [revealedEdgeCount, setRevealedEdgeCount] = useState(0)
-  const [decidingId, setDecidingId] = useState(trail.ids[0] || null)
-  const [done, setDone] = useState(false)
-
-  useEffect(() => {
-    setRevealedNodeCount(1)
-    setRevealedEdgeCount(0)
-    setDecidingId(trail.ids[0] || null)
-    setDone(false)
-
-    const timers = []
-    const NODE_MS = 220
-    const EDGE_MS = 200
-    let t = 80
-
-    trail.steps.forEach((step, i) => {
-      timers.push(
-        setTimeout(() => {
-          setDecidingId(step.fromId)
-        }, t),
-      )
-      t += NODE_MS
-      timers.push(
-        setTimeout(() => {
-          setRevealedEdgeCount(i + 1)
-          setDecidingId(null)
-        }, t),
-      )
-      t += EDGE_MS
-      timers.push(
-        setTimeout(() => {
-          setRevealedNodeCount(i + 2)
-          setDecidingId(step.toId)
-        }, t),
-      )
-      t += 60
-    })
-
-    timers.push(
-      setTimeout(() => {
-        setDecidingId(trail.leafId)
-        setDone(true)
-      }, t + 80),
-    )
-
-    return () => timers.forEach(clearTimeout)
-  }, [trail])
-
-  const revealedNodes = useMemo(
-    () => new Set(trail.ids.slice(0, revealedNodeCount)),
-    [trail.ids, revealedNodeCount],
-  )
-  const revealedEdges = useMemo(() => {
-    const set = new Set()
-    for (let i = 0; i < revealedEdgeCount; i++) {
-      const s = trail.steps[i]
-      if (s) set.add(`${s.fromId}-${s.toId}`)
-    }
-    return set
-  }, [trail.steps, revealedEdgeCount])
-
-  const edges = []
-  const walk = node => {
-    if (node.leaf) return
-    const p = positions.get(node.id)
-    for (const [child, side] of [
-      [node.left, '≤'],
-      [node.right, '>'],
-    ]) {
-      const c = positions.get(child.id)
-      const edgeKey = `${node.id}-${child.id}`
-      edges.push({
-        key: edgeKey,
-        x1: p.x,
-        y1: p.y + 36,
-        x2: c.x,
-        y2: c.y - (child.leaf ? 20 : 36),
-        onPath: revealedEdges.has(edgeKey),
-        side,
-        mx: (p.x + c.x) / 2,
-        my: (p.y + 36 + c.y - 20) / 2,
-      })
-      walk(child)
-    }
-  }
-  walk(LABEL_DECISION_TREE)
-
-  const valueByFeature = Object.fromEntries(
-    (path || []).map(s => [s.feature, s.value]),
-  )
-
-  return (
-    <svg
-      className="tree-svg"
-      viewBox={`0 0 ${vbW} ${vbH}`}
-      role="img"
-      aria-label={`Ścieżka drzewa → ${LABEL_PL[label] || label}`}
-      preserveAspectRatio="xMidYMid meet"
-    >
-      <defs>
-        <filter id={glowId} x="-30%" y="-30%" width="160%" height="160%">
-          <feDropShadow dx="0" dy="1" stdDeviation="1.6" floodOpacity="0.22" />
-        </filter>
-      </defs>
-
-      {edges.map(e => {
-        const d = `M ${padX + e.x1} ${padY + e.y1} C ${padX + e.x1} ${padY + e.y1 + 28}, ${padX + e.x2} ${padY + e.y2 - 28}, ${padX + e.x2} ${padY + e.y2}`
-        return (
-          <g key={e.key}>
-            <path d={d} className="tree-edge" fill="none" />
-            {e.onPath && (
-              <path
-                d={d}
-                className="tree-edge on draw"
-                fill="none"
-                pathLength="1"
-              />
-            )}
-            <text
-              x={padX + e.mx}
-              y={padY + e.my}
-              textAnchor="middle"
-              className={`tree-edge-label${e.onPath ? ' on' : ''}`}
-            >
-              {e.side}
-            </text>
-          </g>
-        )
-      })}
-
-      {[...positions.values()].map(({ x, y, node, w }) => {
-        const on = revealedNodes.has(node.id)
-        const deciding = decidingId === node.id
-        const px = padX + x
-        const py = padY + y
-        if (node.leaf) {
-          const fill = TREE_LEAF_COLOR[node.leaf] || '#6b6560'
-          return (
-            <g
-              key={node.id}
-              className={`tree-node leaf${on ? ' on' : ''}${deciding ? ' deciding' : ''}${done && on ? ' final' : ''}`}
-              filter={on ? `url(#${glowId})` : undefined}
-            >
-              <rect
-                x={px - w / 2}
-                y={py - 20}
-                width={w}
-                height={40}
-                rx="10"
-                fill={on ? fill : '#faf9f7'}
-                stroke={on ? fill : '#d4d0ca'}
-                strokeWidth={on ? 1.5 : 1}
-              />
-              <text
-                x={px}
-                y={py + 1}
-                textAnchor="middle"
-                dominantBaseline="central"
-                fill={on ? '#fff' : '#8a847c'}
-                className="tree-leaf-text"
-              >
-                {LABEL_PL[node.leaf] || node.leaf}
-              </text>
-            </g>
-          )
-        }
-
-        const val = valueByFeature[node.feature]
-        const showVal = on && val != null
-        const thrText = showVal
-          ? `próg ≤ ${formatPathValue(node.threshold)}  ·  jest ${formatPathValue(val)}`
-          : `próg ≤ ${formatPathValue(node.threshold)}`
-        return (
-          <g
-            key={node.id}
-            className={`tree-node split${on ? ' on' : ''}${deciding ? ' deciding' : ''}`}
-            filter={on ? `url(#${glowId})` : undefined}
-          >
-            <rect
-              x={px - w / 2}
-              y={py - 38}
-              width={w}
-              height={76}
-              rx="12"
-              fill={on ? '#1f1c19' : '#faf9f7'}
-              stroke={on ? '#1f1c19' : '#d4d0ca'}
-              strokeWidth={on ? 1.5 : 1}
-            />
-            <text
-              x={px}
-              y={py - 16}
-              textAnchor="middle"
-              fill={on ? '#f7f6f3' : '#2a2622'}
-              className="tree-split-feat"
-            >
-              {node.title}
-            </text>
-            <text
-              x={px}
-              y={py + 2}
-              textAnchor="middle"
-              fill={on ? '#d4cfc8' : '#6b6560'}
-              className="tree-split-sub"
-            >
-              {node.subtitle}
-            </text>
-            <text
-              x={px}
-              y={py + 22}
-              textAnchor="middle"
-              fill={on ? '#c8c4be' : '#8a847c'}
-              className="tree-split-thr"
-            >
-              {thrText}
-            </text>
-          </g>
-        )
-      })}
-    </svg>
-  )
-}
-
-function TreePathOverlay({ path, label, cylinder, headerOffset, onClose }) {
+function GlrtExplainOverlay({ cylinder, engine, onClose }) {
   useEffect(() => {
     const onKey = e => {
       if (e.key === 'Escape') {
@@ -977,34 +642,106 @@ function TreePathOverlay({ path, label, cylinder, headerOffset, onClose }) {
     return () => window.removeEventListener('keydown', onKey, true)
   }, [onClose])
 
-  if (!path?.length) return null
+  const lines = cylinder.decision || []
+  if (!lines.length) return null
+  const sev =
+    cylinder.severity !== 'nie_dotyczy' ? ` · ${SEVERITY_PL[cylinder.severity]}` : ''
 
   return (
     <div
-      className="tree-overlay"
-      style={{ top: headerOffset }}
+      className="glrt-modal"
       role="dialog"
       aria-modal="true"
-      aria-label={`Drzewo decyzji — cylinder ${cylinder}`}
+      aria-label={`Wyjaśnienie modelu — cylinder ${cylinder.cylinder}`}
     >
-      <div className="tree-overlay-bar">
-        <button type="button" className="btn-back" onClick={onClose}>
-          ← Zamknij
-        </button>
-      </div>
-      <div className="tree-overlay-canvas">
-        <DecisionTreeSvg path={path} label={label} />
+      <button type="button" className="factory-modal-backdrop" aria-label="Zamknij" onClick={onClose} />
+      <div className="glrt-modal-panel">
+        <header className="factory-modal-head">
+          <div>
+            <p className="glrt-kicker">Model widmowy (GLRT)</p>
+            <h2 className="glrt-title">
+              Cylinder {cylinder.cylinder}: {LABEL_PL[cylinder.label] || cylinder.label}
+              {sev}
+            </h2>
+          </div>
+          <button type="button" className="factory-modal-close" onClick={onClose}>
+            ×
+          </button>
+        </header>
+        <ul className="glrt-metrics">
+          <li>
+            <span>Istotność</span>
+            <strong>
+              {cylinder.istotnosc_sigma != null ? `${cylinder.istotnosc_sigma}σ` : '—'}
+            </strong>
+          </li>
+          <li>
+            <span>χ dopasowania</span>
+            <strong>{cylinder.chi_dopasowania ?? '—'}</strong>
+          </li>
+          <li>
+            <span>Amplituda</span>
+            <strong>
+              {cylinder.amplituda_mV != null ? `${cylinder.amplituda_mV} mV` : '—'}
+            </strong>
+          </li>
+          <li>
+            <span>Szablon</span>
+            <strong>
+              {cylinder.label === 'ok'
+                ? '—'
+                : LABEL_PL[cylinder.szablon] || cylinder.szablon || '—'}
+            </strong>
+          </li>
+        </ul>
+        <ol className="glrt-decision">
+          {lines.map(line => (
+            <li key={line}>{line}</li>
+          ))}
+        </ol>
+        <div className="diagnosis-chart-block">
+          <Spectrum cylinder={cylinder} engine={engine} height={160} />
+        </div>
       </div>
     </div>
   )
 }
 
+const REPAIR_HINT = {
+  ok: 'Brak działań — cylinder w normie względem reszty jednostki.',
+  zakoksowany: {
+    male: 'Zaplanuj czyszczenie wtryskiwacza (dekarbonizacja / dodatek). Przy najbliższym postoju sprawdź rozpylacz.',
+    srednie: 'Wymontuj wtryskiwacz, wyczyść gniazdo i rozpylacz. Po czyszczeniu powtórz pomiar akustyczny.',
+    duze: 'Wymień wtryskiwacz — silne zakoksowanie rozpylacza. Nie odkładaj: nierówny wtrysk i dymienie.',
+  },
+  lejacy: {
+    male: 'Sprawdź dokręcenie i uszczelnienie wtryskiwacza. Obserwuj spadek ciśnienia na szynie.',
+    srednie: 'Wymień uszczelki i o-ringi wtryskiwacza. Skontroluj przelot powrotu (leak-off).',
+    duze: 'Wymień wtryskiwacz — przeciek paliwa do komory. Ryzyko mycia tulei i rozcieńczenia oleju.',
+  },
+  pompa: {
+    male: 'Sprawdź zasilanie i filtr paliwa. Zmierz ciśnienie na pompie przy następnym przeglądzie.',
+    srednie: 'Zdiagnozuj pompę wysokiego ciśnienia (wydatek, zawór regulacji). Wymień filtr paliwa.',
+    duze: 'Naprawa lub wymiana pompy HP. Do tego czasu ogranicz obciążenie silnika.',
+  },
+  iglica: {
+    male: 'Iglica wtryskiwacza zaczyna zacinać — zaplanuj weryfikację na stole próbnym.',
+    srednie: 'Zregeneruj wtryskiwacz: iglica + korpus. Po regeneracji kalibracja dawki.',
+    duze: 'Wymień wtryskiwacz — uszkodzona iglica. Nie zwlekaj: ryzyko nierównej pracy i spalania stukowego.',
+  },
+  unknown: 'Anomalia poza katalogiem usterek. Porównaj z sąsiednimi cylindrami, sprawdź okablowanie czujnika i powtórz pomiar. Jeśli wraca — oględziny wtrysku na stole.',
+}
+
+function repairHint(cylinder) {
+  const hint = REPAIR_HINT[cylinder.label]
+  if (!hint) return ''
+  if (typeof hint === 'string') return hint
+  return hint[cylinder.severity] || hint.srednie
+}
+
 function CylinderDiagnosis({ engine, cylinder, headerOffset = 72 }) {
   const [showPath, setShowPath] = useState(false)
-  const explainText = (cylinder.explanation?.text || '').replace(
-    /^Cylinder\s+\d+\s*:\s*/i,
-    '',
-  )
+  const hint = repairHint(cylinder)
 
   return (
     <div
@@ -1030,19 +767,18 @@ function CylinderDiagnosis({ engine, cylinder, headerOffset = 72 }) {
             className={`tree-path-toggle${showPath ? ' active' : ''}`}
             onClick={() => setShowPath(true)}
             aria-expanded={showPath}
+            disabled={!cylinder.decision?.length}
           >
-            Zobacz
+            Wyjaśnienie
           </button>
         </div>
       </div>
-      {explainText && <p className="explain">{explainText}</p>}
+      {hint && <p className="explain">{hint}</p>}
       {showPath &&
         createPortal(
-          <TreePathOverlay
-            path={cylinder.decision_path}
-            label={cylinder.label}
-            cylinder={cylinder.cylinder}
-            headerOffset={headerOffset}
+          <GlrtExplainOverlay
+            cylinder={cylinder}
+            engine={engine}
             onClose={() => setShowPath(false)}
           />,
           document.body,
@@ -1066,6 +802,7 @@ function MonitoringPanel({
   closing,
   onClose,
   headerOffset = 0,
+  factoryImage,
 }) {
   const [expanded, setExpanded] = useState(false)
   const [engineExpanded, setEngineExpanded] = useState(false)
@@ -1149,6 +886,9 @@ function MonitoringPanel({
         style={{ top: headerOffset }}
       />
       <div className="monitor-panel-shell" style={shellStyle}>
+        {factoryImage ? (
+          <img className="monitor-morph-img" src={factoryImage} alt="" />
+        ) : null}
         <div className={`monitor-panel-inner${showExpanded ? ' visible' : ''}`}>
           <div className="monitor-toolbar">
             <button type="button" className="btn-back" onClick={onClose}>
@@ -1217,6 +957,7 @@ function MonitoringPanel({
 }
 
 function Spectrum({ cylinder, engine, width = '100%', height = 110 }) {
+  const hatchId = `gap-hatch-${useId().replace(/:/g, '')}`
   const padL = 34
   const padR = 12
   const padTop = 14
@@ -1225,15 +966,24 @@ function Spectrum({ cylinder, engine, width = '100%', height = 110 }) {
   const plotH = height - padTop - padBottom
   const med = engine?.healthy_median
   const color = SEVERITY_COLOR[cylinder.severity] || '#2d6a4f'
-  const band = cylinder.explanation?.anomaly_band
+  const highlights = highlightFreqs(cylinder)
 
-  const cylVals = Array.from({ length: 21 }, (_, f) => Number(cylinder[`mV_${f}`]) || 0)
-  const medVals = med
-    ? Array.from({ length: 21 }, (_, f) => Number(med[`mV_${f}`]) || 0)
-    : []
-  const all = [...cylVals, ...medVals]
-  const rawMin = Math.min(...all)
-  const rawMax = Math.max(...all)
+  const cylVals = binValues(Array.from({ length: 21 }, (_, f) => cylinder[`mV_${f}`]))
+  const missing = cylVals.flatMap((v, f) => (v == null ? [f] : []))
+  const profileSrc = Array.isArray(cylinder.profile_mV) && cylinder.profile_mV.some(v => v != null)
+    ? cylinder.profile_mV
+    : med
+      ? Array.from({ length: 21 }, (_, f) => med[`mV_${f}`])
+      : []
+  const medVals = binValues(profileSrc)
+  const fitted = binValues(cylinder.fitted_fault_mV)
+  const reconVals =
+    cylinder.label !== 'ok' && Array.isArray(cylinder.fitted_fault_mV)
+      ? medVals.map((p, i) => (p == null || fitted[i] == null ? null : p + fitted[i]))
+      : []
+  const all = [...cylVals, ...medVals, ...reconVals].filter(v => v != null)
+  const rawMin = all.length ? Math.min(...all) : 0
+  const rawMax = all.length ? Math.max(...all) : 1
   const span = Math.max(rawMax - rawMin, 0.5)
   const pad = span * 0.12
   let minVal = rawMin - pad
@@ -1263,17 +1013,30 @@ function Spectrum({ cylinder, engine, width = '100%', height = 110 }) {
     return v.toFixed(2)
   }
 
-  const pts = cylVals.map((v, f) => `${toX(f)},${toY(v)}`)
-  const medPts = medVals.length
-    ? medVals.map((v, f) => `${toX(f)},${toY(v)}`).join(' L ')
-    : null
+  const measPath = gappedPath(cylVals, toX, toY)
+  const medPath = gappedPath(medVals, toX, toY)
+  const reconPath = gappedPath(reconVals, toX, toY)
+  const edgeDots = gapEdgeDots(cylVals)
+  const binW = Math.max(toX(1) - toX(0), 4)
 
   return (
+    <>
     <svg
       viewBox={`0 0 ${padL + plotW + padR} ${height}`}
       className="chart"
       preserveAspectRatio="xMidYMid meet"
     >
+      <defs>
+        <pattern
+          id={hatchId}
+          width="4"
+          height="4"
+          patternUnits="userSpaceOnUse"
+          patternTransform="rotate(45)"
+        >
+          <line x1="0" y1="0" x2="0" y2="4" stroke="rgba(28,27,25,0.18)" strokeWidth="1" />
+        </pattern>
+      </defs>
       {ticks.map(v => (
         <g key={v}>
           <line
@@ -1296,32 +1059,99 @@ function Spectrum({ cylinder, engine, width = '100%', height = 110 }) {
           </text>
         </g>
       ))}
-      {band && cylinder.label !== 'ok' && band[1] >= band[0] && (
-        <rect
-          x={toX(band[0]) - 2}
-          y={padTop}
-          width={Math.max(toX(band[1]) - toX(band[0]) + 4, 6)}
-          height={plotH}
-          fill={`${color}22`}
-        />
-      )}
-      {medPts && (
+      {missing.map(f => (
+        <g key={`gap-${f}`}>
+          <rect
+            x={toX(f) - binW / 2}
+            y={padTop}
+            width={binW}
+            height={plotH}
+            fill={`url(#${hatchId})`}
+          />
+          <text
+            x={toX(f)}
+            y={padTop + plotH + 12}
+            textAnchor="middle"
+            fill="#7a7670"
+            fontSize="7"
+            fontFamily="IBM Plex Mono, ui-monospace, monospace"
+          >
+            {f}
+          </text>
+        </g>
+      ))}
+      <HighlightBands
+        freqs={highlights}
+        toX={toX}
+        padTop={padTop}
+        plotH={plotH}
+        color={color}
+      />
+      {medPath && (
         <path
-          d={`M ${medPts}`}
+          d={medPath}
           fill="none"
           stroke={CHART_MEDIAN}
           strokeWidth="1.5"
           strokeDasharray="4 3"
         />
       )}
-      <path
-        d={`M ${pts.join(' L ')}`}
-        fill="none"
-        stroke={color}
-        strokeWidth="2"
-        strokeLinejoin="round"
-      />
+      {reconPath && (
+        <path
+          d={reconPath}
+          fill="none"
+          stroke={CHART_RECON}
+          strokeWidth="1.15"
+          strokeDasharray="1.5 3.5"
+          strokeLinejoin="round"
+          opacity="0.7"
+        />
+      )}
+      {measPath && (
+        <path
+          d={measPath}
+          fill="none"
+          stroke={color}
+          strokeWidth="2"
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
+      )}
+      {edgeDots.map(f => (
+        <circle
+          key={`dot-${f}`}
+          cx={toX(f)}
+          cy={toY(cylVals[f])}
+          r="2.2"
+          fill={color}
+        />
+      ))}
     </svg>
+    <ul className="spectrum-legend">
+      <li>
+        <span className="spectrum-legend-line is-solid" style={{ background: color }} />
+        pomiar
+      </li>
+      {medPath && (
+        <li>
+          <span className="spectrum-legend-line is-profile" />
+          profil silnika
+        </li>
+      )}
+      {reconPath && (
+        <li>
+          <span className="spectrum-legend-line is-recon" />
+          dopasowany szablon
+        </li>
+      )}
+      {missing.length > 0 && (
+        <li>
+          <span className="spectrum-legend-line is-gap" />
+          brak pomiaru ({missing.map(f => `${f} kHz`).join(', ')})
+        </li>
+      )}
+    </ul>
+    </>
   )
 }
 
@@ -1494,7 +1324,14 @@ function EngineDiagram({ engine, selectedCylinder, onCylinderToggle, interactive
 }
 
 function EngineRankRow({ engine, headerOffset = 72 }) {
-  const orderedCylinders = [...engine.cylinders].sort((a, b) => a.cylinder - b.cylinder)
+  const orderedCylinders = [...engine.cylinders].sort((a, b) => {
+    const aBad = a.label !== 'ok' ? 0 : 1
+    const bBad = b.label !== 'ok' ? 0 : 1
+    if (aBad !== bBad) return aBad - bBad
+    const sev = (SEVERITY_RANK[a.severity] ?? 9) - (SEVERITY_RANK[b.severity] ?? 9)
+    if (sev) return sev
+    return a.cylinder - b.cylinder
+  })
 
   return (
     <div className="engine-rank-details">
@@ -1609,7 +1446,7 @@ function App() {
   return (
     <div className="app">
       <div className="app-header" ref={headerRef}>
-        <MainHeader title={headerTitle} onAddClick={() => setAddOpen(true)} />
+        <MainHeader title={headerTitle} onAddClick={panel ? undefined : () => setAddOpen(true)} />
       </div>
 
       <main className="main main--grid-only">
@@ -1649,6 +1486,7 @@ function App() {
           closing={panel.closing}
           onClose={closePanel}
           headerOffset={headerOffset}
+          factoryImage={selectedFactory?.image}
         />
       )}
     </div>

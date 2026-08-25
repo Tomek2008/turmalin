@@ -84,6 +84,13 @@ def _row_spectrum(row: dict) -> list[float]:
     return _interpolate([_parse_float(row.get(col, "")) for col in FREQ_COLS])
 
 
+def _row_spectrum_raw(row: dict | None) -> list[float | None]:
+    """Widmo bez interpolacji — GLRT maskuje luki."""
+    if not row:
+        return [None] * 21
+    return [_parse_float(row.get(col, "")) for col in FREQ_COLS]
+
+
 def _load_csv_rows(path: Path) -> list[dict]:
     for enc in ("utf-8-sig", "utf-8", "cp1250"):
         try:
@@ -243,7 +250,7 @@ def _build_engine_from_train(engine_id: str, rows: list[dict], n_cylinders: int)
         )
         train_cylinders.append(train_row)
 
-        spectrum = _row_spectrum(csv_row) if csv_row else [10.0] * 21
+        spectrum = _row_spectrum_raw(csv_row)
         batch_items.append(
             {
                 "spectrum": spectrum,
@@ -261,7 +268,7 @@ def _build_engine_from_train(engine_id: str, rows: list[dict], n_cylinders: int)
                 engine_id=engine_id,
                 cylinder=item["cylinder"],
                 n_cylinders=n,
-                spectrum=item["spectrum"],
+                spectrum=_interpolate(item["spectrum"]),
                 label=pred["label"],
                 severity=pred["severity"],
             )
